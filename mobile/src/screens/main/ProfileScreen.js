@@ -3,25 +3,78 @@
  * Features: Edit profile, Orders, Wishlist, Settings, Delete account
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { userProfile, orders } from '../../services/dummyData';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
+import apiClient from '../../services/api';
 
 const ProfileScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
-  const user = userProfile;
-  const { userRole } = useAuth();
+  const { userRole, userData, logout, userId } = useAuth();
   const isAuthor = userRole === 'author';
+  const [user, setUser] = useState(userData || userProfile);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch user data from API if userId exists
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (userId && !userData) {
+        try {
+          setLoading(true);
+          const response = await apiClient.getUser(userId);
+          setUser(response.user || userData);
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          // Use dummy data as fallback
+          setUser(userProfile);
+        } finally {
+          setLoading(false);
+        }
+      } else if (userData) {
+        setUser(userData);
+      }
+    };
+    
+    fetchUserData();
+  }, [userId, userData]);
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logout();
+              // Navigation will automatically switch to AuthStack via AppNavigator
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const menuItems = [
     {
@@ -180,15 +233,36 @@ const ProfileScreen = ({ navigation }) => {
     },
   });
 
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={themeColors.primary.main} />
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
       {/* Profile Header */}
       <View style={styles.profileHeader}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>JD</Text>
+          <Text style={styles.avatarText}>{getInitials(user?.name || 'User')}</Text>
         </View>
-        <Text style={styles.userName}>{user.name}</Text>
-        <Text style={styles.userEmail}>{user.email}</Text>
+        <Text style={styles.userName}>{user?.name || 'User'}</Text>
+        <Text style={styles.userEmail}>{user?.email || user?.mobile || 'No email'}</Text>
+        {user?.mobile && (
+          <Text style={[styles.userEmail, { marginTop: 4 }]}>+91 {user.mobile}</Text>
+        )}
         <TouchableOpacity
           style={styles.editButton}
           onPress={() => navigation.navigate('EditProfile')}
@@ -217,7 +291,7 @@ const ProfileScreen = ({ navigation }) => {
         <TouchableOpacity style={styles.dangerButton}>
           <Text style={styles.dangerButtonText}>Delete Account</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.logoutButton}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>

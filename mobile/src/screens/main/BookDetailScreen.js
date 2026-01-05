@@ -3,7 +3,7 @@
  * Features: Cover image, Summary, Sample reading, Author info, Ratings, Price, Add to wishlist
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,13 @@ import {
   Image,
   FlatList,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { getBookById, wishlistBooks } from '../../services/dummyData';
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const BookDetailScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -25,15 +27,59 @@ const BookDetailScreen = ({ route, navigation }) => {
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { bookId } = route.params || {};
-  const book = getBookById(bookId) || getBookById('1');
-  const [isWishlisted, setIsWishlisted] = useState(
-    wishlistBooks.some((b) => b.id === bookId)
-  );
+  const [book, setBook] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isWishlisted, setIsWishlisted] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const coverImages = book.coverImages || [book.cover];
   const screenWidth = Dimensions.get('window').width;
   const isAuthor = userRole === 'author';
-  const isMyBook = isAuthor && userId && book.authorId === userId;
+  const isMyBook = isAuthor && userId && book?.author_id === userId;
+
+  // Fetch book from API
+  useEffect(() => {
+    const fetchBook = async () => {
+      if (!bookId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const response = await apiClient.getBook(bookId);
+        setBook(response.book);
+        // Check if book is in wishlist (TODO: implement wishlist API)
+        setIsWishlisted(wishlistBooks.some((b) => b.id === bookId));
+      } catch (error) {
+        console.error('Error fetching book:', error);
+        // Fallback to dummy data
+        const dummyBook = getBookById(bookId) || getBookById('1');
+        setBook(dummyBook);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBook();
+  }, [bookId]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={themeColors.primary.main} />
+      </View>
+    );
+  }
+
+  if (!book) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 40 }]}>
+        <Text style={{ fontSize: 18, color: themeColors.text.secondary }}>Book not found</Text>
+      </View>
+    );
+  }
+
+  const coverImages = book.cover_images || (book.cover_image_url ? [book.cover_image_url] : [book.cover || 'https://via.placeholder.com/200']);
+  const authorName = book.author?.name || book.author_name || 'Unknown Author';
 
   const styles = StyleSheet.create({
     container: {
@@ -301,21 +347,21 @@ const BookDetailScreen = ({ route, navigation }) => {
       {/* Book Info */}
       <View style={styles.content}>
         <Text style={styles.title}>{book.title}</Text>
-        <Text style={styles.author}>By {book.author.name}</Text>
+        <Text style={styles.author}>By {authorName}</Text>
 
         {/* Rating */}
         <View style={styles.ratingContainer}>
-          <Text style={styles.rating}>⭐ {book.rating}</Text>
-          <Text style={styles.reviews}>({book.reviews} reviews)</Text>
+          <Text style={styles.rating}>⭐ {book.rating || '0.0'}</Text>
+          <Text style={styles.reviews}>({book.reviews_count || 0} reviews)</Text>
         </View>
 
         {/* Price */}
         <View style={styles.priceContainer}>
           <Text style={styles.price}>
-            {book.isFree ? 'Free' : `₹${book.price}`}
+            {book.is_free ? 'Free' : `₹${book.price || 0}`}
           </Text>
-          {book.originalPrice > book.price && (
-            <Text style={styles.originalPrice}>₹{book.originalPrice}</Text>
+          {book.original_price && book.original_price > book.price && (
+            <Text style={styles.originalPrice}>₹{book.original_price}</Text>
           )}
           <TouchableOpacity
             style={styles.reviewsButton}
@@ -329,29 +375,29 @@ const BookDetailScreen = ({ route, navigation }) => {
         <View style={styles.detailsContainer}>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>Pages</Text>
-            <Text style={styles.detailValue}>{book.pages}</Text>
+            <Text style={styles.detailValue}>{book.pages || 'N/A'}</Text>
           </View>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>Language</Text>
-            <Text style={styles.detailValue}>{book.language}</Text>
+            <Text style={styles.detailValue}>{book.language || 'English'}</Text>
           </View>
           <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>Category</Text>
-            <Text style={styles.detailValue}>{book.category.name}</Text>
+            <Text style={styles.detailValue}>{book.category?.name || 'Uncategorized'}</Text>
           </View>
         </View>
 
         {/* Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Summary</Text>
-          <Text style={styles.summary}>{book.summary}</Text>
+          <Text style={styles.summary}>{book.summary || 'No summary available.'}</Text>
         </View>
 
         {/* Author Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About the Author</Text>
           <Text style={styles.authorInfo}>
-            {book.author.bio || `${book.author.name} is an experienced agricultural expert.`}
+            {book.author?.bio || `${authorName} is an experienced agricultural expert.`}
           </Text>
         </View>
 

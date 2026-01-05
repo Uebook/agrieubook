@@ -42,10 +42,10 @@ const SplashScreen = ({ onFinish }) => {
       }),
     ]).start();
 
-    // Navigate after splash duration
+    // Navigate after splash duration (minimum 2 seconds for animation)
     const timer = setTimeout(() => {
       onFinish();
-    }, 2500);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, []);

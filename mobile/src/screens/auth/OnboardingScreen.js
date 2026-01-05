@@ -19,7 +19,7 @@ import { categories as categoryData } from '../../services/dummyData';
 const OnboardingScreen = ({ route, navigation }) => {
   const { role } = route.params || {};
   const [selectedCategories, setSelectedCategories] = useState([]);
-  const { login } = useAuth();
+  const { login, userData } = useAuth();
 
   const categories = categoryData.map((cat) => cat.name);
 
@@ -35,8 +35,15 @@ const OnboardingScreen = ({ route, navigation }) => {
     if (selectedCategories.length === 0) {
       return;
     }
-    // Save preferences and login user
+    // Save preferences and update user interests
+    // Update interests in context
     login(role, selectedCategories);
+    
+    // TODO: Update interests in API/database if user is logged in
+    // if (userData?.id) {
+    //   await apiClient.updateUser(userData.id, { interests: selectedCategories });
+    // }
+    
     // Navigation will happen automatically via AuthContext state change
   };
 

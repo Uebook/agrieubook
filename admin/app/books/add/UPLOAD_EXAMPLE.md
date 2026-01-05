@@ -64,3 +64,4 @@ const { data } = await supabase.storage
 3. **covers** (public) - Cover images
 4. **curriculum** (private) - Government PDFs
 
+

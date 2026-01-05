@@ -14,30 +14,81 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Colors from '../../../color';
+import apiClient from '../../services/api';
+import { useSettings } from '../../context/SettingsContext';
 
 const LoginScreen = ({ navigation }) => {
+  const { getThemeColors } = useSettings();
+  const themeColors = getThemeColors();
   const [loginMethod, setLoginMethod] = useState('mobile'); // 'mobile', 'email', 'social'
-  const [mobileNumber, setMobileNumber] = useState('8439993033');
+  const [mobileNumber, setMobileNumber] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleMobileLogin = () => {
+  const handleMobileLogin = async () => {
     if (mobileNumber.length < 10) {
       Alert.alert('Error', 'Please enter a valid mobile number');
       return;
     }
-    // Navigate to OTP screen
-    navigation.navigate('OTP', { mobileNumber });
+    
+    setLoading(true);
+    try {
+      // Send OTP via API
+      const response = await apiClient.sendOTP(mobileNumber);
+      
+      if (response.success) {
+        // Navigate to OTP screen
+        navigation.navigate('OTP', { mobileNumber });
+        
+        // Show OTP in development mode
+        if (response.otp) {
+          Alert.alert('Development Mode', `OTP: ${response.otp}\n\n(This is only shown in development)`);
+        }
+      } else {
+        Alert.alert('Error', response.error || 'Failed to send OTP');
+      }
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+      Alert.alert('Error', error.message || 'Failed to send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEmailLogin = () => {
+  const handleEmailLogin = async () => {
     if (!email.includes('@')) {
       Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
-    // TODO: Implement email login
-    Alert.alert('Info', 'Email login coming soon');
+    if (!password || password.length < 6) {
+      Alert.alert('Error', 'Please enter a password (minimum 6 characters)');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // Login via API
+      const response = await apiClient.login(email, password);
+      
+      if (response.success) {
+        // Navigate to role selection with user data
+        navigation.navigate('RoleSelection', {
+          userData: response.user,
+          emailLogin: true,
+        });
+      } else {
+        Alert.alert('Error', response.error || 'Login failed');
+      }
+    } catch (error) {
+      console.error('Error logging in:', error);
+      Alert.alert('Error', error.message || 'Login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSocialLogin = (provider) => {
@@ -85,17 +136,22 @@ const LoginScreen = ({ navigation }) => {
               <TextInput
                 style={styles.input}
                 placeholder="Enter mobile number"
-                placeholderTextColor={Colors.input.placeholder}
+                placeholderTextColor={themeColors.input.placeholder}
                 keyboardType="phone-pad"
                 value={mobileNumber}
                 onChangeText={setMobileNumber}
                 maxLength={10}
               />
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
                 onPress={handleMobileLogin}
+                disabled={loading}
               >
-                <Text style={styles.primaryButtonText}>Send OTP</Text>
+                {loading ? (
+                  <ActivityIndicator color={Colors.button.text} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Send OTP</Text>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -107,17 +163,31 @@ const LoginScreen = ({ navigation }) => {
               <TextInput
                 style={styles.input}
                 placeholder="Enter email address"
-                placeholderTextColor={Colors.input.placeholder}
+                placeholderTextColor={themeColors.input.placeholder}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 value={email}
                 onChangeText={setEmail}
               />
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter password"
+                placeholderTextColor={themeColors.input.placeholder}
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
                 onPress={handleEmailLogin}
+                disabled={loading}
               >
-                <Text style={styles.primaryButtonText}>Continue</Text>
+                {loading ? (
+                  <ActivityIndicator color={Colors.button.text} />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Login</Text>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -145,6 +215,14 @@ const LoginScreen = ({ navigation }) => {
                 <Text style={styles.socialButtonText}>Continue with Apple</Text>
               </TouchableOpacity>
             )}
+          </View>
+
+          {/* Register Link */}
+          <View style={styles.registerLinkContainer}>
+            <Text style={styles.registerLinkText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.registerLink}>Create Account</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -235,6 +313,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
   socialContainer: {
     marginTop: 20,
   },
@@ -266,6 +347,20 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     fontSize: 16,
     fontWeight: '500',
+  },
+  registerLinkContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+  registerLinkText: {
+    color: Colors.text.secondary,
+    fontSize: 14,
+  },
+  registerLink: {
+    color: Colors.primary.main,
+    fontSize: 14,
+    fontWeight: 'bold',
   },
 });
 

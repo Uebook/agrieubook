@@ -3,7 +3,10 @@
  * Handles all API requests to Next.js API routes
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const API_BASE_URL = 
+  typeof window !== 'undefined' 
+    ? window.location.origin 
+    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 class ApiClient {
   private baseUrl: string;

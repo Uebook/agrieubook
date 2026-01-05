@@ -3,7 +3,7 @@
  * Features: Search, Filters, Sorting, Book listings
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,12 @@ import {
   FlatList,
   Image,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
-import { books as allBooks, sortBooks, filterBooks, categories, authors } from '../../services/dummyData';
+import { books as dummyBooks, sortBooks, filterBooks, categories, authors } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const BookStoreScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -35,39 +37,72 @@ const BookStoreScreen = ({ navigation }) => {
     rating: null,
     language: null,
   });
+  const [allBooks, setAllBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch books from API
+  useEffect(() => {
+    const fetchBooks = async () => {
+      try {
+        setLoading(true);
+        const params = {
+          status: 'published',
+          limit: 100,
+          ...(filters.category && { category: filters.category }),
+          ...(filters.author && { author: filters.author }),
+          ...(filters.language && { language: filters.language }),
+          ...(searchQuery && { search: searchQuery }),
+        };
+        const response = await apiClient.getBooks(params);
+        setAllBooks(response.books || []);
+      } catch (error) {
+        console.error('Error fetching books:', error);
+        // Fallback to dummy data
+        setAllBooks(dummyBooks);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchBooks();
+  }, [searchQuery, filters.category, filters.author, filters.language]);
 
   const books = useMemo(() => {
     let filtered = allBooks;
     
     // If user is an author, show only their own books
     if (userRole === 'author' && userId) {
-      filtered = filtered.filter((book) => book.authorId === userId);
+      filtered = filtered.filter((book) => book.author_id === userId);
     }
     
-    // Apply search filter
-    if (searchQuery) {
+    // Apply search filter (if not already filtered by API)
+    if (searchQuery && !searchQuery.trim()) {
       filtered = filtered.filter(
         (book) =>
-          book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          book.author.name.toLowerCase().includes(searchQuery.toLowerCase())
+          book.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          book.author?.name?.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    // Apply other filters
-    const activeFilters = {
-      category: filters.category || undefined,
-      author: filters.author || undefined,
-      priceMin: filters.priceMin && filters.priceMin.trim() !== '' ? parseFloat(filters.priceMin) : undefined,
-      priceMax: filters.priceMax && filters.priceMax.trim() !== '' ? parseFloat(filters.priceMax) : undefined,
-      rating: filters.rating || undefined,
-      language: filters.language || undefined,
-    };
-    
-    filtered = filterBooks(filtered, activeFilters);
+    // Apply price filters
+    if (filters.priceMin && filters.priceMin.trim() !== '') {
+      filtered = filtered.filter((book) => (book.price || 0) >= parseFloat(filters.priceMin));
+    }
+    if (filters.priceMax && filters.priceMax.trim() !== '') {
+      filtered = filtered.filter((book) => (book.price || 0) <= parseFloat(filters.priceMax));
+    }
     
     // Apply sorting
-    return sortBooks(filtered, sortBy);
-  }, [searchQuery, sortBy, filters, userRole, userId]);
+    if (sortBy === 'price_low') {
+      filtered = [...filtered].sort((a, b) => (a.price || 0) - (b.price || 0));
+    } else if (sortBy === 'price_high') {
+      filtered = [...filtered].sort((a, b) => (b.price || 0) - (a.price || 0));
+    } else if (sortBy === 'latest') {
+      filtered = [...filtered].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    }
+    
+    return filtered;
+  }, [searchQuery, sortBy, filters, userRole, userId, allBooks]);
 
   // Count active filters
   const activeFiltersCount = useMemo(() => {
@@ -409,28 +444,32 @@ const BookStoreScreen = ({ navigation }) => {
     },
   });
 
-  const renderBookItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.bookCard}
-      onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
-    >
-      <Image
-        source={{ uri: item.cover }}
-        style={styles.bookCover}
-        resizeMode="cover"
-      />
-      <View style={styles.bookInfo}>
-        <Text style={styles.bookTitle} numberOfLines={2}>{item.title}</Text>
-        <Text style={styles.bookAuthor}>{item.author.name}</Text>
-        <View style={styles.bookMeta}>
-          <Text style={styles.rating}>⭐ {item.rating}</Text>
-          <Text style={styles.price}>
-            {item.isFree ? 'Free' : `₹${item.price}`}
-          </Text>
+  const renderBookItem = ({ item }) => {
+    const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
+    const authorName = item.author?.name || item.author_name || 'Unknown Author';
+    const price = item.is_free ? 'Free' : `₹${item.price || 0}`;
+    
+    return (
+      <TouchableOpacity
+        style={styles.bookCard}
+        onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
+      >
+        <Image
+          source={{ uri: coverUrl }}
+          style={styles.bookCover}
+          resizeMode="cover"
+        />
+        <View style={styles.bookInfo}>
+          <Text style={styles.bookTitle} numberOfLines={2}>{item.title}</Text>
+          <Text style={styles.bookAuthor}>{authorName}</Text>
+          <View style={styles.bookMeta}>
+            <Text style={styles.rating}>⭐ {item.rating || '0.0'}</Text>
+            <Text style={styles.price}>{price}</Text>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -767,10 +806,21 @@ const BookStoreScreen = ({ navigation }) => {
         <FlatList
           data={books}
           renderItem={renderBookItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
           numColumns={2}
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.row}
+          ListEmptyComponent={
+            loading ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={themeColors.primary.main} />
+              </View>
+            ) : (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: themeColors.text.secondary }}>No books found</Text>
+              </View>
+            )
+          }
         />
       )}
     </View>

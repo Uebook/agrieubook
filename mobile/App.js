@@ -13,28 +13,34 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/components/common/SplashScreen';
 import AppStatusBar from './src/components/common/AppStatusBar';
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SettingsProvider } from './src/context/SettingsContext';
 import Colors from './color';
 
-function App() {
+function AppContent() {
     const [showSplash, setShowSplash] = useState(true);
+    const { isAuthenticated, isLoading } = useAuth();
 
     const handleSplashFinish = () => {
         setShowSplash(false);
     };
 
+    // If auth is still loading, show splash
+    if (isLoading || showSplash) {
+        return <SplashScreen onFinish={handleSplashFinish} />;
+    }
+
+    return <AppNavigator />;
+}
+
+function App() {
     return (
         <AuthProvider>
             <SettingsProvider>
                 <GestureHandlerRootView style={{ flex: 1 }}>
                     <SafeAreaProvider>
                         <AppStatusBar />
-                        {showSplash ? (
-                            <SplashScreen onFinish={handleSplashFinish} />
-                        ) : (
-                            <AppNavigator />
-                        )}
+                        <AppContent />
                     </SafeAreaProvider>
                 </GestureHandlerRootView>
             </SettingsProvider>

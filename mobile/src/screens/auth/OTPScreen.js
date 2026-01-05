@@ -12,13 +12,18 @@ import {
   StyleSheet,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Colors from '../../../color';
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const OTPScreen = ({ route, navigation }) => {
   const { mobileNumber } = route.params || {};
-  const [otp, setOtp] = useState(['1', '1', '1', '1', '1', '1']);
+  const { login } = useAuth();
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(60);
+  const [verifying, setVerifying] = useState(false);
   const inputRefs = useRef([]);
 
   useEffect(() => {
@@ -45,21 +50,55 @@ const OTPScreen = ({ route, navigation }) => {
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const otpString = otp.join('');
     if (otpString.length !== 6) {
       Alert.alert('Error', 'Please enter complete OTP');
       return;
     }
-    // TODO: Verify OTP with backend
-    // For now, navigate to role selection
-    navigation.navigate('RoleSelection');
+    
+    setVerifying(true);
+    
+    try {
+      // Verify OTP with backend API
+      const response = await apiClient.verifyOTP(mobileNumber, otpString);
+      
+      if (response.success) {
+        // Navigate to role selection with user data from API
+        navigation.navigate('RoleSelection', { 
+          mobileNumber,
+          userData: response.user,
+          otpVerified: true,
+        });
+      } else {
+        Alert.alert('Error', response.error || 'Invalid OTP. Please try again.');
+      }
+    } catch (error) {
+      console.error('OTP verification error:', error);
+      Alert.alert('Error', error.message || 'Invalid OTP. Please try again.');
+    } finally {
+      setVerifying(false);
+    }
   };
 
-  const handleResend = () => {
-    setTimer(60);
-    // TODO: Resend OTP
-    Alert.alert('Success', 'OTP resent successfully');
+  const handleResend = async () => {
+    try {
+      const response = await apiClient.sendOTP(mobileNumber);
+      if (response.success) {
+        setTimer(60);
+        Alert.alert('Success', 'OTP resent successfully');
+        
+        // Show OTP in development mode
+        if (response.otp) {
+          Alert.alert('Development Mode', `New OTP: ${response.otp}\n\n(This is only shown in development)`);
+        }
+      } else {
+        Alert.alert('Error', response.error || 'Failed to resend OTP');
+      }
+    } catch (error) {
+      console.error('Error resending OTP:', error);
+      Alert.alert('Error', error.message || 'Failed to resend OTP');
+    }
   };
 
   return (
@@ -85,15 +124,22 @@ const OTPScreen = ({ route, navigation }) => {
               keyboardType="number-pad"
               maxLength={1}
               selectTextOnFocus
+              placeholder=""
+              placeholderTextColor={Colors.input.placeholder}
             />
           ))}
         </View>
 
         <TouchableOpacity
-          style={styles.verifyButton}
+          style={[styles.verifyButton, verifying && styles.verifyButtonDisabled]}
           onPress={handleVerify}
+          disabled={verifying}
         >
-          <Text style={styles.verifyButtonText}>Verify OTP</Text>
+          {verifying ? (
+            <ActivityIndicator color={Colors.button.text} />
+          ) : (
+            <Text style={styles.verifyButtonText}>Verify OTP</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.resendContainer}>
@@ -168,6 +214,9 @@ const styles = StyleSheet.create({
     color: Colors.button.text,
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  verifyButtonDisabled: {
+    opacity: 0.6,
   },
   resendContainer: {
     flexDirection: 'row',

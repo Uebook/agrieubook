@@ -3,7 +3,7 @@
  * Features: Personalized recommendations, Recently opened, Continue Reading, Trending books
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import Colors from '../../../color';
 import {
@@ -27,6 +28,7 @@ import {
 } from '../../services/dummyData';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
+import apiClient from '../../services/api';
 
 const HomeScreen = ({ navigation }) => {
   const { userRole, userId } = useAuth();
@@ -34,27 +36,70 @@ const HomeScreen = ({ navigation }) => {
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const isAuthor = userRole === 'author';
+  const [allBooks, setAllBooks] = useState([]);
+  const [allAudioBooks, setAllAudioBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch books and audio books from API
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // For authors: fetch only their own books
+        // For readers: fetch all published books
+        const params = isAuthor && userId 
+          ? { author: userId, limit: 100 } // Get all books by this author
+          : { status: 'published', limit: 50 };
+        
+        const [booksResponse, audioBooksResponse] = await Promise.all([
+          apiClient.getBooks(params),
+          apiClient.getAudioBooks(isAuthor && userId ? { author: userId, limit: 100 } : { limit: 50 }),
+        ]);
+        
+        setAllBooks(booksResponse.books || []);
+        setAllAudioBooks(audioBooksResponse.audioBooks || []);
+      } catch (error) {
+        console.error('Error fetching books:', error);
+        // Fallback to dummy data on error
+        let fallbackBooks = books;
+        let fallbackAudio = getAudioBooks();
+        
+        // Filter by author if needed
+        if (isAuthor && userId) {
+          fallbackBooks = books.filter((book) => book.authorId === userId);
+          fallbackAudio = fallbackAudio.filter((audio) => audio.authorId === userId);
+        }
+        
+        setAllBooks(fallbackBooks);
+        setAllAudioBooks(fallbackAudio);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [isAuthor, userId]);
 
   // For authors: show only their own books, for readers: show normal content
   const myBooks = useMemo(() => {
     if (isAuthor && userId) {
-      return getBooksByAuthor(userId);
+      return allBooks.filter((book) => book.author_id === userId);
     }
     return [];
-  }, [isAuthor, userId]);
+  }, [isAuthor, userId, allBooks]);
 
   const myAudioBooks = useMemo(() => {
     if (isAuthor && userId) {
-      const allAudio = getAudioBooks();
-      return allAudio.filter((audio) => audio.authorId === userId);
+      return allAudioBooks.filter((audio) => audio.author_id === userId);
     }
     return [];
-  }, [isAuthor, userId]);
+  }, [isAuthor, userId, allAudioBooks]);
 
   const continueReading = isAuthor ? [] : continueReadingBooks;
-  const trending = isAuthor ? [] : trendingBooks;
-  const recommendations = isAuthor ? [] : recommendedBooks;
-  const audioPodcasts = isAuthor ? [] : getAudioBooks();
+  const trending = isAuthor ? [] : (allBooks.slice(0, 10) || trendingBooks);
+  const recommendations = isAuthor ? [] : (allBooks.slice(0, 10) || recommendedBooks);
+  const audioPodcasts = isAuthor ? [] : allAudioBooks;
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -76,41 +121,51 @@ const HomeScreen = ({ navigation }) => {
     return notifications.filter((notif) => !notif.isRead).length;
   };
 
-  const renderBookItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.bookCard}
-      onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
-    >
-      <Image
-        source={{ uri: item.cover }}
-        style={styles.bookCover}
-        resizeMode="cover"
-      />
-      <Text style={dynamicStyles.bookTitle} numberOfLines={2}>{item.title}</Text>
-      <Text style={dynamicStyles.bookAuthor}>{item.author.name}</Text>
-    </TouchableOpacity>
-  );
-
-  const renderAuthorBookItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.bookCard}
-      onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
-    >
-      <Image
-        source={{ uri: item.cover }}
-        style={styles.bookCover}
-        resizeMode="cover"
-      />
-      <Text style={dynamicStyles.bookTitle} numberOfLines={2}>{item.title}</Text>
-      <Text style={dynamicStyles.bookAuthor}>{item.author.name}</Text>
+  const renderBookItem = ({ item }) => {
+    const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
+    const authorName = item.author?.name || item.author_name || 'Unknown Author';
+    
+    return (
       <TouchableOpacity
-        style={styles.editButton}
-        onPress={() => navigation.navigate('EditBook', { bookId: item.id })}
+        style={styles.bookCard}
+        onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
       >
-        <Text style={styles.editButtonText}>✏️ Edit</Text>
+        <Image
+          source={{ uri: coverUrl }}
+          style={styles.bookCover}
+          resizeMode="cover"
+        />
+        <Text style={dynamicStyles.bookTitle} numberOfLines={2}>{item.title}</Text>
+        <Text style={dynamicStyles.bookAuthor}>{authorName}</Text>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
+
+  const renderAuthorBookItem = ({ item }) => {
+    const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
+    const authorName = item.author?.name || item.author_name || 'Unknown Author';
+    
+    return (
+      <TouchableOpacity
+        style={styles.bookCard}
+        onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
+      >
+        <Image
+          source={{ uri: coverUrl }}
+          style={styles.bookCover}
+          resizeMode="cover"
+        />
+        <Text style={dynamicStyles.bookTitle} numberOfLines={2}>{item.title}</Text>
+        <Text style={dynamicStyles.bookAuthor}>{authorName}</Text>
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={() => navigation.navigate('EditBook', { bookId: item.id })}
+        >
+          <Text style={styles.editButtonText}>✏️ Edit</Text>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
 
   const dynamicStyles = StyleSheet.create({
     container: {

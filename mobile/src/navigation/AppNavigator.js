@@ -22,8 +22,10 @@ const AppNavigator = () => {
     );
   }
 
+  // Use key prop to force complete remount when auth state changes
+  // This ensures navigation state is completely reset
   return (
-    <NavigationContainer>
+    <NavigationContainer key={isAuthenticated ? 'main' : 'auth'}>
       {isAuthenticated ? <MainStack /> : <AuthStack />}
     </NavigationContainer>
   );

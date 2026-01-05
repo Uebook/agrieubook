@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { dummyAuthors } from '@/lib/dummyData';
+import apiClient from '@/lib/api/client';
 
 export default function AddBookPage() {
   const router = useRouter();
@@ -22,7 +22,11 @@ export default function AddBookPage() {
   });
   const [coverImages, setCoverImages] = useState<File[]>([]);
   const [coverImagePreviews, setCoverImagePreviews] = useState<string[]>([]);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [authors, setAuthors] = useState<any[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const categories = [
     { id: '1', name: 'Organic Farming' },
@@ -30,6 +34,19 @@ export default function AddBookPage() {
     { id: '3', name: 'Livestock' },
     { id: '4', name: 'Agricultural Technology' },
   ];
+
+  // Fetch authors on mount
+  useEffect(() => {
+    const fetchAuthors = async () => {
+      try {
+        const response = await apiClient.getAuthors();
+        setAuthors(response.authors || []);
+      } catch (error) {
+        console.error('Error fetching authors:', error);
+      }
+    };
+    fetchAuthors();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -63,16 +80,70 @@ export default function AddBookPage() {
     setCoverImagePreviews(coverImagePreviews.filter((_, i) => i !== index));
   };
 
+  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPdfFile(file);
+      setPdfPreview(file.name);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!pdfFile) {
+      alert('Please upload a PDF file');
+      return;
+    }
+    
     setLoading(true);
+    setUploadProgress(0);
 
-    // Simulate API call
-    setTimeout(() => {
-      alert('Book added successfully! (This is dummy data - API integration in phase 2)');
+    try {
+      // Step 1: Upload PDF file
+      setUploadProgress(10);
+      const pdfUploadResult = await apiClient.uploadFile(pdfFile, 'books', 'pdfs');
+      const pdfUrl = pdfUploadResult.url;
+
+      // Step 2: Upload cover images
+      setUploadProgress(30);
+      const coverImageUrls: string[] = [];
+      for (let i = 0; i < coverImages.length; i++) {
+        const coverResult = await apiClient.uploadFile(coverImages[i], 'covers', 'books');
+        coverImageUrls.push(coverResult.url);
+        setUploadProgress(30 + (i + 1) * (50 / coverImages.length));
+      }
+
+      // Step 3: Create book record
+      setUploadProgress(80);
+      const bookData = {
+        title: formData.title,
+        author_id: formData.authorId,
+        summary: formData.summary,
+        price: parseFloat(formData.price) || 0,
+        original_price: parseFloat(formData.originalPrice) || parseFloat(formData.price) || 0,
+        pages: formData.pages ? parseInt(formData.pages) : null,
+        language: formData.language,
+        category_id: formData.categoryId,
+        isbn: formData.isbn || null,
+        is_free: formData.isFree,
+        pdf_url: pdfUrl,
+        cover_image_url: coverImageUrls[0] || null,
+        cover_images: coverImageUrls,
+      };
+
+      await apiClient.createBook(bookData);
+      setUploadProgress(100);
+
+      alert('Book added successfully!');
       router.push('/books');
+    } catch (error: any) {
+      console.error('Error adding book:', error);
+      alert(`Error: ${error.message || 'Failed to add book'}`);
+    } finally {
       setLoading(false);
-    }, 1000);
+      setUploadProgress(0);
+    }
   };
 
   return (
@@ -120,7 +191,7 @@ export default function AddBookPage() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
                     <option value="">Select Author</option>
-                    {dummyAuthors.map(author => (
+                    {authors.map(author => (
                       <option key={author.id} value={author.id}>{author.name}</option>
                     ))}
                   </select>
@@ -245,6 +316,32 @@ export default function AddBookPage() {
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    PDF File *
+                  </label>
+                  <label className="inline-block px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 cursor-pointer mb-2">
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={handlePdfChange}
+                      required
+                      className="hidden"
+                    />
+                    {pdfFile ? 'Change PDF File' : 'Upload PDF File'}
+                  </label>
+                  {pdfPreview && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm font-medium text-gray-900">📄 {pdfPreview}</p>
+                      {pdfFile && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Size: {(pdfFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Cover Images
                   </label>
                   <div className="space-y-4">
@@ -282,6 +379,21 @@ export default function AddBookPage() {
                   </div>
                 </div>
               </div>
+
+              {loading && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Upload Progress</span>
+                    <span className="text-sm font-medium text-gray-700">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex space-x-4 pt-4">
                 <button

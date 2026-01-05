@@ -59,6 +59,40 @@ class ApiClient {
     return this.request(`/api/books/${id}/download`);
   }
 
+  async createBook(data) {
+    return this.request('/api/books', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateBook(id, data) {
+    return this.request(`/api/books/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteBook(id) {
+    return this.request(`/api/books/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async createAudioBook(data) {
+    return this.request('/api/audio-books', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAudioBook(id, data) {
+    return this.request(`/api/audio-books/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Authors API
   async getAuthors(params = {}) {
     const queryParams = new URLSearchParams();
@@ -73,6 +107,29 @@ class ApiClient {
 
   async getAuthor(id) {
     return this.request(`/api/authors/${id}`);
+  }
+
+  // Users API
+  async getUsers(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    const query = queryParams.toString();
+    return this.request(`/api/users${query ? `?${query}` : ''}`);
+  }
+
+  async getUser(id) {
+    return this.request(`/api/users/${id}`);
+  }
+
+  async updateUser(id, data) {
+    return this.request(`/api/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 
   // Audio Books API
@@ -132,9 +189,39 @@ class ApiClient {
   async searchBooks(query, filters = {}) {
     return this.getBooks({ search: query, ...filters });
   }
+
+  // Auth API
+  async sendOTP(mobile) {
+    return this.request('/api/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ mobile }),
+    });
+  }
+
+  async verifyOTP(mobile, otp) {
+    return this.request('/api/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ mobile, otp }),
+    });
+  }
+
+  async login(email, password) {
+    return this.request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  async register(data) {
+    return this.request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 // Export singleton instance
 const apiClient = new ApiClient();
 export default apiClient;
+
 

@@ -10,10 +10,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import Colors from '../../../color';
+import { useAuth } from '../../context/AuthContext';
 
-const RoleSelectionScreen = ({ navigation }) => {
+const RoleSelectionScreen = ({ route, navigation }) => {
+  const { login } = useAuth();
+  const { mobileNumber, userData, otpVerified } = route.params || {};
   const [selectedRole, setSelectedRole] = useState(null);
 
   const roles = [
@@ -35,12 +39,37 @@ const RoleSelectionScreen = ({ navigation }) => {
     setSelectedRole(roleId);
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (!selectedRole) {
       return;
     }
-    // Navigate to onboarding
-    navigation.navigate('Onboarding', { role: selectedRole });
+    
+    try {
+      // Login user with selected role
+      const role = selectedRole === 'author' ? 'author' : 'reader';
+      const userId = userData?.id || Date.now().toString();
+      
+      // If user already has interests from registration, use them; otherwise skip onboarding
+      const interests = userData?.interests || [];
+      
+      await login(role, interests, userId, userData || {
+        id: userId,
+        mobile: mobileNumber,
+        name: `User ${mobileNumber?.slice(-4) || ''}`,
+        email: '',
+        interests: interests,
+      });
+      
+      // Skip onboarding if interests are already set (from registration)
+      // Otherwise, navigate to onboarding to select interests
+      if (interests.length === 0) {
+        navigation.navigate('Onboarding', { role: selectedRole });
+      }
+      // If interests exist, navigation will happen automatically via AuthContext
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('Error', 'Failed to login. Please try again.');
+    }
   };
 
   return (

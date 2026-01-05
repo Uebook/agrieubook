@@ -37,9 +37,26 @@ export default function DashboardPage() {
         endDate || undefined
       );
       setStats(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching dashboard stats:', err);
-      setError('Failed to load dashboard data');
+      // Show user-friendly error message
+      const errorMessage = err?.message?.includes('Supabase') 
+        ? 'Please configure Supabase. See SETUP_INSTRUCTIONS.md'
+        : 'Failed to load dashboard data. Check console for details.';
+      setError(errorMessage);
+      // Set default stats to prevent blank page
+      setStats({
+        totalBooks: 0,
+        totalAudioBooks: 0,
+        totalAuthors: 0,
+        totalUsers: 0,
+        totalRevenue: 0,
+        totalPayments: 0,
+        pendingBooks: 0,
+        pendingAudioBooks: 0,
+        activeUsers: 0,
+        authorRevenue: [],
+      });
     } finally {
       setLoading(false);
     }

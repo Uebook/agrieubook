@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { dummyAuthors } from '@/lib/dummyData';
+import apiClient from '@/lib/api/client';
 
 export default function AddAudioBookPage() {
   const router = useRouter();
@@ -21,6 +21,8 @@ export default function AddAudioBookPage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioPreview, setAudioPreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [authors, setAuthors] = useState<any[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const categories = [
     { id: '1', name: 'Organic Farming' },
@@ -28,6 +30,19 @@ export default function AddAudioBookPage() {
     { id: '3', name: 'Livestock' },
     { id: '4', name: 'Agricultural Technology' },
   ];
+
+  // Fetch authors on mount
+  useEffect(() => {
+    const fetchAuthors = async () => {
+      try {
+        const response = await apiClient.getAuthors();
+        setAuthors(response.authors || []);
+      } catch (error) {
+        console.error('Error fetching authors:', error);
+      }
+    };
+    fetchAuthors();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -74,14 +89,49 @@ export default function AddAudioBookPage() {
     }
     
     setLoading(true);
+    setUploadProgress(0);
 
-    // In phase 2, upload files to server
-    // For now, simulate upload
-    setTimeout(() => {
-      alert('Audio book added successfully! (This is dummy data - API integration in phase 2)');
+    try {
+      // Step 1: Upload audio file
+      setUploadProgress(10);
+      const audioUploadResult = await apiClient.uploadFile(audioFile, 'audio-books', 'audio');
+      const audioUrl = audioUploadResult.url;
+
+      // Step 2: Upload cover images
+      setUploadProgress(30);
+      const coverImageUrls: string[] = [];
+      for (let i = 0; i < coverImages.length; i++) {
+        const coverResult = await apiClient.uploadFile(coverImages[i], 'covers', 'audio-books');
+        coverImageUrls.push(coverResult.url);
+        setUploadProgress(30 + (i + 1) * (50 / coverImages.length));
+      }
+
+      // Step 3: Create audio book record
+      setUploadProgress(80);
+      const audioBookData = {
+        title: formData.title,
+        author_id: formData.authorId,
+        description: formData.description,
+        duration: formData.duration,
+        language: formData.language,
+        category_id: formData.categoryId,
+        audio_url: audioUrl,
+        cover_image_url: coverImageUrls[0] || null,
+        cover_images: coverImageUrls,
+      };
+
+      await apiClient.createAudioBook(audioBookData);
+      setUploadProgress(100);
+
+      alert('Audio book added successfully!');
       router.push('/audio-books');
+    } catch (error: any) {
+      console.error('Error adding audio book:', error);
+      alert(`Error: ${error.message || 'Failed to add audio book'}`);
+    } finally {
       setLoading(false);
-    }, 1000);
+      setUploadProgress(0);
+    }
   };
 
   return (
@@ -129,7 +179,7 @@ export default function AddAudioBookPage() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
                     <option value="">Select Author</option>
-                    {dummyAuthors.map(author => (
+                    {authors.map(author => (
                       <option key={author.id} value={author.id}>{author.name}</option>
                     ))}
                   </select>
@@ -263,6 +313,21 @@ export default function AddAudioBookPage() {
                   />
                 </div>
               </div>
+
+              {loading && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Upload Progress</span>
+                    <span className="text-sm font-medium text-gray-700">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex space-x-4 pt-4">
                 <button

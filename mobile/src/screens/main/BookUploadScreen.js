@@ -19,14 +19,18 @@ import {
 import Header from '../../components/common/Header';
 import { categories } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const BookUploadScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
+  const { userId } = useAuth();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [coverImages, setCoverImages] = useState([]); // Array of { id, uri, name, type }
+  const [coverImages, setCoverImages] = useState([]); // Array of { id, uri, name, type, file }
+  const [pdfFile, setPdfFile] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
   const [bookType, setBookType] = useState('book'); // 'book' or 'audio'
   const [formData, setFormData] = useState({
@@ -99,42 +103,183 @@ const BookUploadScreen = ({ navigation }) => {
     setCoverImages(coverImages.filter((img) => img.id !== imageId));
   };
 
-  const simulateUpload = () => {
+  const uploadBook = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'Please login to upload books');
+      return;
+    }
+
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsUploading(false);
-          Alert.alert(
-            'Success',
-            'Book uploaded successfully!',
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  setFormData({
-                    title: '',
-                    description: '',
-                    category: '',
-                    price: '',
-                    language: 'English',
-                    pages: '',
-                    isbn: '',
-                  });
-                  setUploadProgress(0);
-                },
-              },
-            ]
-          );
-          return 100;
+    try {
+      let totalSteps = 0;
+      let currentStep = 0;
+
+      // Calculate total steps
+      if (bookType === 'book') {
+        totalSteps = 1 + (coverImages.length || 1) + 1; // PDF + Images + Create record
+      } else {
+        totalSteps = 1 + (coverImages.length || 1) + 1; // Audio + Images + Create record
+      }
+
+      // Step 1: Upload PDF/Audio file
+      if (bookType === 'book' && pdfFile) {
+        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+        const pdfResult = await apiClient.uploadFile(pdfFile, 'books', 'pdfs');
+        const pdfUrl = pdfResult.url;
+        currentStep++;
+
+        // Step 2: Upload cover images
+        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+        const coverImageUrls = [];
+        const imageUploadPromises = [];
+        
+        for (let i = 0; i < coverImages.length; i++) {
+          if (coverImages[i].file || coverImages[i].uri) {
+            const imageFile = coverImages[i].file || {
+              uri: coverImages[i].uri,
+              type: coverImages[i].type || 'image/jpeg',
+              name: coverImages[i].name || `cover_${i}.jpg`,
+            };
+            
+            imageUploadPromises.push(
+              apiClient.uploadFile(imageFile, 'books', 'covers').then((result) => {
+                coverImageUrls.push(result.url);
+                currentStep++;
+                setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+              })
+            );
+          }
         }
-        return prev + 5;
-      });
-    }, 200);
+        
+        await Promise.all(imageUploadPromises);
+
+        // Step 3: Create book record
+        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+        const bookData = {
+          title: formData.title,
+          author_id: userId,
+          summary: formData.description,
+          price: parseFloat(formData.price) || 0,
+          pages: formData.pages ? parseInt(formData.pages) : null,
+          language: formData.language,
+          category_id: formData.category,
+          isbn: formData.isbn || null,
+          is_free: false,
+          pdf_url: pdfUrl,
+          cover_image_url: coverImageUrls[0] || null,
+          cover_images: coverImageUrls,
+        };
+
+        await apiClient.createBook(bookData);
+        currentStep++;
+        setUploadProgress(100);
+
+        Alert.alert(
+          'Success',
+          'Book uploaded successfully!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setFormData({
+                  title: '',
+                  description: '',
+                  category: '',
+                  price: '',
+                  language: 'English',
+                  pages: '',
+                  isbn: '',
+                });
+                setCoverImages([]);
+                setPdfFile(null);
+                setUploadProgress(0);
+                navigation.goBack();
+              },
+            },
+          ]
+        );
+      } else if (bookType === 'audio' && audioFile) {
+        // Step 1: Upload audio file
+        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+        const audioResult = await apiClient.uploadFile(audioFile, 'audio-books', 'audio');
+        const audioUrl = audioResult.url;
+        currentStep++;
+
+        // Step 2: Upload cover images
+        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+        const coverImageUrls = [];
+        const imageUploadPromises = [];
+        
+        for (let i = 0; i < coverImages.length; i++) {
+          if (coverImages[i].file || coverImages[i].uri) {
+            const imageFile = coverImages[i].file || {
+              uri: coverImages[i].uri,
+              type: coverImages[i].type || 'image/jpeg',
+              name: coverImages[i].name || `cover_${i}.jpg`,
+            };
+            
+            imageUploadPromises.push(
+              apiClient.uploadFile(imageFile, 'audio-books', 'covers').then((result) => {
+                coverImageUrls.push(result.url);
+                currentStep++;
+                setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+              })
+            );
+          }
+        }
+        
+        await Promise.all(imageUploadPromises);
+
+        // Step 3: Create audio book record
+        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+        const audioBookData = {
+          title: formData.title,
+          author_id: userId,
+          description: formData.description,
+          duration: '00:00', // TODO: Calculate from audio file
+          language: formData.language,
+          category_id: formData.category,
+          audio_url: audioUrl,
+          cover_url: coverImageUrls[0] || null,
+        };
+
+        await apiClient.createAudioBook(audioBookData);
+        currentStep++;
+        setUploadProgress(100);
+
+        Alert.alert(
+          'Success',
+          'Audio book uploaded successfully!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setFormData({
+                  title: '',
+                  description: '',
+                  category: '',
+                  price: '',
+                  language: 'English',
+                  pages: '',
+                  isbn: '',
+                });
+                setCoverImages([]);
+                setAudioFile(null);
+                setUploadProgress(0);
+                navigation.goBack();
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      Alert.alert('Error', error.message || 'Failed to upload book. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleUpload = () => {
@@ -151,13 +296,24 @@ const BookUploadScreen = ({ navigation }) => {
       Alert.alert('Error', 'Please select a category');
       return;
     }
-    if (!formData.price || parseFloat(formData.price) < 0) {
-      Alert.alert('Error', 'Please enter a valid price');
-      return;
+    if (bookType === 'book') {
+      if (!pdfFile) {
+        Alert.alert('Error', 'Please upload a PDF file');
+        return;
+      }
+      if (!formData.price || parseFloat(formData.price) < 0) {
+        Alert.alert('Error', 'Please enter a valid price');
+        return;
+      }
+    } else {
+      if (!audioFile) {
+        Alert.alert('Error', 'Please upload an audio file');
+        return;
+      }
     }
 
     // Start upload
-    simulateUpload();
+    uploadBook();
   };
 
   const InputField = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false }) => (
@@ -696,10 +852,29 @@ const BookUploadScreen = ({ navigation }) => {
             <>
               <View style={styles.uploadSection}>
                 <Text style={styles.sectionTitle}>Upload Book File</Text>
-                <TouchableOpacity style={styles.uploadButton}>
+                <TouchableOpacity
+                  style={styles.uploadButton}
+                  onPress={() => {
+                    // TODO: Use react-native-document-picker or expo-document-picker
+                    // For now, simulate file selection
+                    Alert.alert('Info', 'File picker will be implemented with react-native-document-picker');
+                    // Example: setPdfFile({ uri: 'file://...', name: 'book.pdf', type: 'application/pdf' });
+                  }}
+                >
                   <Text style={styles.uploadButtonText}>📄 Choose File</Text>
                   <Text style={styles.uploadHint}>PDF, EPUB, MOBI formats supported</Text>
                 </TouchableOpacity>
+                {pdfFile && (
+                  <View style={styles.audioFileInfo}>
+                    <Text style={styles.audioFileName}>📄 {pdfFile.name || 'book.pdf'}</Text>
+                    <TouchableOpacity
+                      onPress={() => setPdfFile(null)}
+                      style={styles.removeAudioButton}
+                    >
+                      <Text style={styles.removeAudioText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
 
               <View style={styles.uploadSection}>

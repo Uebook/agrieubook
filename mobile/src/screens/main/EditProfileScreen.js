@@ -3,7 +3,7 @@
  * Allows users to edit their profile information
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,28 +13,59 @@ import {
   TextInput,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import Header from '../../components/common/Header';
 import { userProfile } from '../../services/dummyData';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
+import apiClient from '../../services/api';
 
 const EditProfileScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
-  const { userRole } = useAuth();
+  const { userRole, userData, userId, updateUserData } = useAuth();
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: userProfile.name,
-    email: userProfile.email,
-    mobile: userProfile.mobile,
-    bio: '',
-    address: '',
-    city: '',
-    state: '',
-    pincode: '',
-    website: '',
+    name: userData?.name || userProfile.name,
+    email: userData?.email || userProfile.email || '',
+    mobile: userData?.mobile || userProfile.mobile || '',
+    bio: userData?.bio || '',
+    address: userData?.address || '',
+    city: userData?.city || '',
+    state: userData?.state || '',
+    pincode: userData?.pincode || '',
+    website: userData?.website || '',
   });
+
+  // Load user data on mount
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (userId && !userData) {
+        try {
+          const response = await apiClient.getUser(userId);
+          const user = response.user;
+          if (user) {
+            setFormData({
+              name: user.name || '',
+              email: user.email || '',
+              mobile: user.mobile || '',
+              bio: user.bio || '',
+              address: user.address || '',
+              city: user.city || '',
+              state: user.state || '',
+              pincode: user.pincode || '',
+              website: user.website || '',
+            });
+          }
+        } catch (error) {
+          console.error('Error loading user data:', error);
+        }
+      }
+    };
+    loadUserData();
+  }, [userId, userData]);
 
   const handleInputChange = (field, value) => {
     setFormData({
@@ -43,28 +74,60 @@ const EditProfileScreen = ({ navigation }) => {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validate form
     if (!formData.name.trim()) {
       Alert.alert('Error', 'Please enter your name');
       return;
     }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
+    if (formData.email && !formData.email.includes('@')) {
       Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
-    if (!formData.mobile.trim() || formData.mobile.length < 10) {
+    if (formData.mobile && formData.mobile.length < 10) {
       Alert.alert('Error', 'Please enter a valid mobile number');
       return;
     }
 
-    // TODO: Save to backend/AsyncStorage
-    Alert.alert('Success', 'Profile updated successfully!', [
-      {
-        text: 'OK',
-        onPress: () => navigation.goBack(),
-      },
-    ]);
+    setLoading(true);
+
+    try {
+      // Update user via API
+      if (userId) {
+        const updatedUser = await apiClient.updateUser(userId, {
+          name: formData.name,
+          email: formData.email,
+          mobile: formData.mobile,
+          bio: formData.bio,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          website: formData.website,
+        });
+
+        // Update local user data
+        await updateUserData(updatedUser.user);
+      } else {
+        // If no userId, just update local data
+        await updateUserData({
+          ...userData,
+          ...formData,
+        });
+      }
+
+      Alert.alert('Success', 'Profile updated successfully!', [
+        {
+          text: 'OK',
+          onPress: () => navigation.goBack(),
+        },
+      ]);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', error.message || 'Failed to update profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const InputField = ({
@@ -190,6 +253,9 @@ const EditProfileScreen = ({ navigation }) => {
       fontSize: 16 * fontSizeMultiplier,
       fontWeight: 'bold',
     },
+    saveButtonDisabled: {
+      opacity: 0.6,
+    },
     helpText: {
       fontSize: 12 * fontSizeMultiplier,
       color: themeColors.text.tertiary,
@@ -313,8 +379,16 @@ const EditProfileScreen = ({ navigation }) => {
           )}
 
           {/* Save Button */}
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Save Changes</Text>
+          <TouchableOpacity 
+            style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
+            onPress={handleSave}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={themeColors.button.text} />
+            ) : (
+              <Text style={styles.saveButtonText}>Save Changes</Text>
+            )}
           </TouchableOpacity>
 
           <Text style={styles.helpText}>

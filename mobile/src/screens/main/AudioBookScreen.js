@@ -20,6 +20,7 @@ import Header from '../../components/common/Header';
 import { getAudioBooks } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const AudioBookScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -27,14 +28,40 @@ const AudioBookScreen = ({ route, navigation }) => {
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { audioId } = route.params || {};
-  const audioBooks = getAudioBooks();
-  const audioBook = audioBooks.find((a) => a.id === audioId) || audioBooks[0];
+  const [audioBook, setAudioBook] = useState(null);
+  const [loading, setLoading] = useState(true);
   const isAuthor = userRole === 'author';
-  const isMyAudio = isAuthor && userId && audioBook.authorId === userId;
+  const isMyAudio = isAuthor && userId && audioBook?.author_id === userId;
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // Fetch audio book from API
+  useEffect(() => {
+    const fetchAudioBook = async () => {
+      if (!audioId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const response = await apiClient.getAudioBook(audioId);
+        setAudioBook(response.audioBook);
+      } catch (error) {
+        console.error('Error fetching audio book:', error);
+        // Fallback to dummy data
+        const audioBooks = getAudioBooks();
+        const dummyAudio = audioBooks.find((a) => a.id === audioId) || audioBooks[0];
+        setAudioBook(dummyAudio);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAudioBook();
+  }, [audioId]);
 
   // Parse duration string to seconds (e.g., "45:30" -> 2730)
   useEffect(() => {
@@ -197,6 +224,25 @@ const AudioBookScreen = ({ route, navigation }) => {
     },
   });
 
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={themeColors.primary.main} />
+      </View>
+    );
+  }
+
+  if (!audioBook) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 40 }]}>
+        <Text style={{ fontSize: 18, color: themeColors.text.secondary }}>Audio book not found</Text>
+      </View>
+    );
+  }
+
+  const coverUrl = audioBook.cover_url || audioBook.cover || 'https://via.placeholder.com/300';
+  const authorName = audioBook.author?.name || audioBook.author_name || 'Unknown Author';
+
   return (
     <View style={styles.container}>
       <Header title="Audio Book" navigation={navigation} />
@@ -204,12 +250,12 @@ const AudioBookScreen = ({ route, navigation }) => {
         <View style={styles.content}>
           <View style={styles.coverContainer}>
             <Image
-              source={{ uri: audioBook.cover }}
+              source={{ uri: coverUrl }}
               style={styles.coverImage}
               resizeMode="cover"
             />
             <Text style={styles.title}>{audioBook.title}</Text>
-            <Text style={styles.author}>By {audioBook.author.name}</Text>
+            <Text style={styles.author}>By {authorName}</Text>
             <View style={styles.freeBadge}>
               <Text style={styles.freeBadgeText}>🆓 FREE PODCAST</Text>
             </View>
@@ -261,7 +307,7 @@ const AudioBookScreen = ({ route, navigation }) => {
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Category</Text>
-              <Text style={styles.infoValue}>{audioBook.category.name}</Text>
+              <Text style={styles.infoValue}>{audioBook.category?.name || 'Uncategorized'}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Published</Text>

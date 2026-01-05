@@ -12,10 +12,12 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import Header from '../../components/common/Header';
 import { searchBooks, books, categories } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
+import apiClient from '../../services/api';
 
 const SearchScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -24,18 +26,44 @@ const SearchScreen = ({ route, navigation }) => {
   const { query: initialQuery } = route.params || {};
   const [searchQuery, setSearchQuery] = useState(initialQuery || '');
   const [recentSearches, setRecentSearches] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   // Popular suggestions based on categories
   const suggestions = useMemo(() => {
     return categories.slice(0, 6).map((cat) => cat.name);
   }, []);
 
-  // Search results
-  const searchResults = useMemo(() => {
-    if (searchQuery.trim().length === 0) {
-      return [];
-    }
-    return searchBooks(searchQuery);
+  // Fetch search results from API
+  useEffect(() => {
+    const performSearch = async () => {
+      if (searchQuery.trim().length === 0) {
+        setSearchResults([]);
+        return;
+      }
+
+      try {
+        setSearchLoading(true);
+        const response = await apiClient.searchBooks(searchQuery, {
+          status: 'published',
+          limit: 50,
+        });
+        setSearchResults(response.books || []);
+      } catch (error) {
+        console.error('Error searching books:', error);
+        // Fallback to dummy data
+        setSearchResults(searchBooks(searchQuery));
+      } finally {
+        setSearchLoading(false);
+      }
+    };
+
+    // Debounce search
+    const timer = setTimeout(() => {
+      performSearch();
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [searchQuery]);
 
   // Popular books to show when no search query
@@ -211,30 +239,35 @@ const SearchScreen = ({ route, navigation }) => {
     },
   });
 
-  const renderBookItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.bookCard}
-      onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
-    >
-      <Image
-        source={{ uri: item.cover }}
-        style={styles.bookCover}
-        resizeMode="cover"
-      />
-      <View style={styles.bookInfo}>
-        <Text style={styles.bookTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.bookAuthor}>{item.author.name}</Text>
-        <View style={styles.bookMeta}>
-          <Text style={styles.rating}>⭐ {item.rating}</Text>
-          <Text style={styles.price}>
-            {item.isFree ? 'Free' : `₹${item.price}`}
+  const renderBookItem = ({ item }) => {
+    const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
+    const authorName = item.author?.name || item.author_name || 'Unknown Author';
+    
+    return (
+      <TouchableOpacity
+        style={styles.bookCard}
+        onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
+      >
+        <Image
+          source={{ uri: coverUrl }}
+          style={styles.bookCover}
+          resizeMode="cover"
+        />
+        <View style={styles.bookInfo}>
+          <Text style={styles.bookTitle} numberOfLines={2}>
+            {item.title}
           </Text>
+          <Text style={styles.bookAuthor}>{authorName}</Text>
+          <View style={styles.bookMeta}>
+            <Text style={styles.rating}>⭐ {item.rating || '0.0'}</Text>
+            <Text style={styles.price}>
+              {item.is_free ? 'Free' : `₹${item.price || 0}`}
+            </Text>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderSuggestionChip = (suggestion) => (
     <TouchableOpacity
@@ -272,7 +305,11 @@ const SearchScreen = ({ route, navigation }) => {
               {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'} found
             </Text>
           </View>
-          {searchResults.length === 0 ? (
+          {searchLoading ? (
+            <View style={[styles.emptyContainer, { padding: 40 }]}>
+              <ActivityIndicator size="large" color={themeColors.primary.main} />
+            </View>
+          ) : searchResults.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>🔍</Text>
               <Text style={styles.emptyText}>No results found</Text>
@@ -284,7 +321,7 @@ const SearchScreen = ({ route, navigation }) => {
             <FlatList
               data={searchResults}
               renderItem={renderBookItem}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
               numColumns={2}
               contentContainerStyle={styles.listContent}
               columnWrapperStyle={styles.row}

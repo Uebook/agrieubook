@@ -33,6 +33,12 @@ export default function AuthorsPage() {
                     <div className="max-w-7xl mx-auto">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-3xl font-bold text-gray-900">Authors Management</h2>
+                            <button
+                                onClick={() => router.push('/authors/add')}
+                                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                            >
+                                + Add Author
+                            </button>
                         </div>
 
                         <div className="bg-white rounded-lg shadow-sm overflow-hidden">

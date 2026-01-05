@@ -20,6 +20,7 @@ import Header from '../../components/common/Header';
 import { categories, getBookById, getAudioBooks } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const EditBookScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -40,39 +41,90 @@ const EditBookScreen = ({ route, navigation }) => {
     isbn: '',
   });
 
-  // Load book/audio data
+  const [loading, setLoading] = useState(true);
+
+  // Load book/audio data from API
   useEffect(() => {
-    if (isAudio && audioId) {
-      const audioBooks = getAudioBooks();
-      const audio = audioBooks.find((a) => a.id === audioId);
-      if (audio && audio.authorId === userId) {
-        setFormData({
-          title: audio.title,
-          description: audio.description,
-          category: audio.categoryId,
-          price: '0', // Audio books are free
-          language: audio.language,
-          pages: '',
-          isbn: '',
-        });
-        setCoverImages([{ id: '1', uri: audio.cover, name: 'cover.jpg' }]);
+    const fetchBookData = async () => {
+      try {
+        setLoading(true);
+        
+        if (isAudio && audioId) {
+          const response = await apiClient.getAudioBook(audioId);
+          const audio = response.audioBook;
+          
+          if (audio && audio.author_id === userId) {
+            setFormData({
+              title: audio.title,
+              description: audio.description || '',
+              category: audio.category_id,
+              price: '0', // Audio books are free
+              language: audio.language || 'English',
+              pages: '',
+              isbn: '',
+            });
+            if (audio.cover_url) {
+              setCoverImages([{ id: '1', uri: audio.cover_url, name: 'cover.jpg' }]);
+            }
+          }
+        } else if (bookId) {
+          const response = await apiClient.getBook(bookId);
+          const book = response.book;
+          
+          if (book && book.author_id === userId) {
+            setFormData({
+              title: book.title,
+              description: book.summary || '',
+              category: book.category_id,
+              price: book.price?.toString() || '0',
+              language: book.language || 'English',
+              pages: book.pages?.toString() || '',
+              isbn: book.isbn || '',
+            });
+            const images = book.cover_images || (book.cover_image_url ? [book.cover_image_url] : []);
+            setCoverImages(images.map((img, idx) => ({ id: idx.toString(), uri: img, name: `cover_${idx}.jpg` })));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching book data:', error);
+        // Fallback to dummy data
+        if (isAudio && audioId) {
+          const audioBooks = getAudioBooks();
+          const audio = audioBooks.find((a) => a.id === audioId);
+          if (audio && audio.authorId === userId) {
+            setFormData({
+              title: audio.title,
+              description: audio.description,
+              category: audio.categoryId,
+              price: '0',
+              language: audio.language,
+              pages: '',
+              isbn: '',
+            });
+            setCoverImages([{ id: '1', uri: audio.cover, name: 'cover.jpg' }]);
+          }
+        } else if (bookId) {
+          const book = getBookById(bookId);
+          if (book && book.authorId === userId) {
+            setFormData({
+              title: book.title,
+              description: book.summary,
+              category: book.categoryId,
+              price: book.price.toString(),
+              language: book.language,
+              pages: book.pages.toString(),
+              isbn: book.isbn || '',
+            });
+            const images = book.coverImages || [book.cover];
+            setCoverImages(images.map((img, idx) => ({ id: idx.toString(), uri: img, name: `cover_${idx}.jpg` })));
+          }
+        }
+      } finally {
+        setLoading(false);
       }
-    } else if (bookId) {
-      const book = getBookById(bookId);
-      if (book && book.authorId === userId) {
-        setFormData({
-          title: book.title,
-          description: book.summary,
-          category: book.categoryId,
-          price: book.price.toString(),
-          language: book.language,
-          pages: book.pages.toString(),
-          isbn: book.isbn || '',
-        });
-        const images = book.coverImages || [book.cover];
-        setCoverImages(images.map((img, idx) => ({ id: idx.toString(), uri: img, name: `cover_${idx}.jpg` })));
-      }
-    }
+    };
+
+    fetchBookData();
   }, [bookId, audioId, isAudio, userId]);
 
   const handleInputChange = (field, value) => {
@@ -128,7 +180,7 @@ const EditBookScreen = ({ route, navigation }) => {
     setCoverImages(coverImages.filter((img) => img.id !== imageId));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.title.trim()) {
       Alert.alert('Error', 'Please enter book title');
       return;
@@ -143,9 +195,76 @@ const EditBookScreen = ({ route, navigation }) => {
     }
 
     setIsSaving(true);
-    // Simulate save
-    setTimeout(() => {
-      setIsSaving(false);
+
+    try {
+      if (isAudio && audioId) {
+        // Update audio book
+        const audioBookData = {
+          title: formData.title,
+          description: formData.description,
+          category_id: formData.category,
+          language: formData.language,
+        };
+
+        // Upload new cover images if any
+        const coverImageUrls = [];
+        for (const image of coverImages) {
+          if (image.uri && !image.uri.startsWith('http')) {
+            // New image, upload it
+            const uploadResult = await apiClient.uploadFile(
+              { uri: image.uri, type: image.type || 'image/jpeg', name: image.name || 'cover.jpg' },
+              'audio-books',
+              'covers'
+            );
+            coverImageUrls.push(uploadResult.url);
+          } else {
+            // Existing image URL
+            coverImageUrls.push(image.uri);
+          }
+        }
+
+        if (coverImageUrls.length > 0) {
+          audioBookData.cover_url = coverImageUrls[0];
+        }
+
+        await apiClient.updateAudioBook(audioId, audioBookData);
+      } else if (bookId) {
+        // Update book
+        const bookData = {
+          title: formData.title,
+          summary: formData.description,
+          category_id: formData.category,
+          price: parseFloat(formData.price) || 0,
+          pages: formData.pages ? parseInt(formData.pages) : null,
+          language: formData.language,
+          isbn: formData.isbn || null,
+        };
+
+        // Upload new cover images if any
+        const coverImageUrls = [];
+        for (const image of coverImages) {
+          if (image.uri && !image.uri.startsWith('http')) {
+            // New image, upload it
+            const uploadResult = await apiClient.uploadFile(
+              { uri: image.uri, type: image.type || 'image/jpeg', name: image.name || 'cover.jpg' },
+              'books',
+              'covers'
+            );
+            coverImageUrls.push(uploadResult.url);
+          } else {
+            // Existing image URL
+            coverImageUrls.push(image.uri);
+          }
+        }
+
+        if (coverImageUrls.length > 0) {
+          bookData.cover_image_url = coverImageUrls[0];
+          bookData.cover_images = coverImageUrls;
+        }
+
+        await apiClient.updateBook(bookId, bookData);
+      }
+
       Alert.alert(
         'Success',
         `${isAudio ? 'Audio book' : 'Book'} updated successfully!`,
@@ -156,7 +275,12 @@ const EditBookScreen = ({ route, navigation }) => {
           },
         ]
       );
-    }, 1500);
+    } catch (error) {
+      console.error('Error updating book:', error);
+      Alert.alert('Error', error.message || 'Failed to update book. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const InputField = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false, editable = true }) => (
@@ -389,6 +513,14 @@ const EditBookScreen = ({ route, navigation }) => {
       lineHeight: 18 * fontSizeMultiplier,
     },
   });
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={themeColors.primary.main} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

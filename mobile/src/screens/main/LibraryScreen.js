@@ -3,7 +3,7 @@
  * Features: Purchased books, Download for offline, Reading history
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,12 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { myLibraryBooks } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const LibraryScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -23,16 +25,42 @@ const LibraryScreen = ({ navigation }) => {
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'downloaded', 'recent'
+  const [myBooks, setMyBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const myBooks = useMemo(() => {
-    let books = myLibraryBooks;
-    
-    // If user is an author, show only their own books
-    if (userRole === 'author' && userId) {
-      books = books.filter((book) => book.authorId === userId);
-    }
-    
-    return books;
+  // Fetch user's library from API
+  useEffect(() => {
+    const fetchLibrary = async () => {
+      try {
+        setLoading(true);
+        
+        // If user is author, fetch their own books
+        if (userRole === 'author' && userId) {
+          const response = await apiClient.getBooks({
+            author: userId,
+            status: 'published',
+            limit: 100,
+          });
+          setMyBooks(response.books || []);
+        } else {
+          // For readers, fetch purchased books (TODO: implement purchases API)
+          // For now, use dummy data
+          setMyBooks(myLibraryBooks);
+        }
+      } catch (error) {
+        console.error('Error fetching library:', error);
+        // Fallback to dummy data
+        let books = myLibraryBooks;
+        if (userRole === 'author' && userId) {
+          books = books.filter((book) => book.authorId === userId);
+        }
+        setMyBooks(books);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLibrary();
   }, [userRole, userId]);
 
   const filteredBooks = useMemo(() => {
@@ -45,7 +73,9 @@ const LibraryScreen = ({ navigation }) => {
   }, [activeTab, myBooks]);
 
   const renderBookItem = ({ item }) => {
-    const isMyBook = userRole === 'author' && userId && item.authorId === userId;
+    const isMyBook = userRole === 'author' && userId && item.author_id === userId;
+    const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
+    const authorName = item.author?.name || item.author_name || 'Unknown Author';
     
     return (
       <TouchableOpacity
@@ -53,7 +83,7 @@ const LibraryScreen = ({ navigation }) => {
         onPress={() => isMyBook ? navigation.navigate('EditBook', { bookId: item.id }) : navigation.navigate('Reader', { bookId: item.id })}
       >
         <Image
-          source={{ uri: item.cover }}
+          source={{ uri: coverUrl }}
           style={styles.bookCover}
           resizeMode="cover"
         />
@@ -61,7 +91,7 @@ const LibraryScreen = ({ navigation }) => {
           <Text style={styles.bookTitle} numberOfLines={2}>
             {item.title}
           </Text>
-          <Text style={styles.bookAuthor}>{item.author.name}</Text>
+          <Text style={styles.bookAuthor}>{authorName}</Text>
           {isMyBook && (
             <View style={styles.editBadge}>
               <Text style={styles.editBadgeText}>✏️ Tap to Edit</Text>
@@ -255,11 +285,15 @@ const LibraryScreen = ({ navigation }) => {
       </View>
 
       {/* Books List */}
-      {filteredBooks.length > 0 ? (
+      {loading ? (
+        <View style={[styles.emptyContainer, { padding: 40 }]}>
+          <ActivityIndicator size="large" color={themeColors.primary.main} />
+        </View>
+      ) : filteredBooks.length > 0 ? (
         <FlatList
           data={filteredBooks}
           renderItem={renderBookItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
           contentContainerStyle={styles.listContent}
         />
       ) : (

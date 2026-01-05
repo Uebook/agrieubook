@@ -2,7 +2,7 @@
  * Category Screen - Shows books in a specific category
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,13 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import Header from '../../components/common/Header';
 import { books, categories, getBooksByCategory } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const CategoryScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -22,6 +24,8 @@ const CategoryScreen = ({ route, navigation }) => {
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { category, categoryId } = route.params || { category: 'All', categoryId: null };
+  const [categoryBooks, setCategoryBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // Get category details
   const categoryData = useMemo(() => {
@@ -31,21 +35,43 @@ const CategoryScreen = ({ route, navigation }) => {
     return null;
   }, [categoryId]);
 
-  // Get books for this category
-  const categoryBooks = useMemo(() => {
-    let filteredBooks;
-    if (categoryId) {
-      filteredBooks = getBooksByCategory(categoryId);
-    } else {
-      filteredBooks = books; // Show all books if no categoryId
-    }
-    
-    // If user is an author, show only their own books
-    if (userRole === 'author' && userId) {
-      filteredBooks = filteredBooks.filter((book) => book.authorId === userId);
-    }
-    
-    return filteredBooks;
+  // Fetch books for this category from API
+  useEffect(() => {
+    const fetchBooks = async () => {
+      try {
+        setLoading(true);
+        const params = {
+          status: 'published',
+          limit: 100,
+          ...(categoryId && { category: categoryId }),
+        };
+        
+        // If user is author, filter by author_id
+        if (userRole === 'author' && userId) {
+          params.author = userId;
+        }
+        
+        const response = await apiClient.getBooks(params);
+        setCategoryBooks(response.books || []);
+      } catch (error) {
+        console.error('Error fetching category books:', error);
+        // Fallback to dummy data
+        let filteredBooks;
+        if (categoryId) {
+          filteredBooks = getBooksByCategory(categoryId);
+        } else {
+          filteredBooks = books;
+        }
+        if (userRole === 'author' && userId) {
+          filteredBooks = filteredBooks.filter((book) => book.authorId === userId);
+        }
+        setCategoryBooks(filteredBooks);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBooks();
   }, [categoryId, userRole, userId]);
 
   const styles = StyleSheet.create({
@@ -147,30 +173,35 @@ const CategoryScreen = ({ route, navigation }) => {
     },
   });
 
-  const renderBookItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.bookCard}
-      onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
-    >
-      <Image
-        source={{ uri: item.cover }}
-        style={styles.bookCover}
-        resizeMode="cover"
-      />
-      <View style={styles.bookInfo}>
-        <Text style={styles.bookTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.bookAuthor}>{item.author.name}</Text>
-        <View style={styles.bookMeta}>
-          <Text style={styles.rating}>⭐ {item.rating}</Text>
-          <Text style={styles.price}>
-            {item.isFree ? 'Free' : `₹${item.price}`}
+  const renderBookItem = ({ item }) => {
+    const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
+    const authorName = item.author?.name || item.author_name || 'Unknown Author';
+    
+    return (
+      <TouchableOpacity
+        style={styles.bookCard}
+        onPress={() => navigation.navigate('BookDetail', { bookId: item.id })}
+      >
+        <Image
+          source={{ uri: coverUrl }}
+          style={styles.bookCover}
+          resizeMode="cover"
+        />
+        <View style={styles.bookInfo}>
+          <Text style={styles.bookTitle} numberOfLines={2}>
+            {item.title}
           </Text>
+          <Text style={styles.bookAuthor}>{authorName}</Text>
+          <View style={styles.bookMeta}>
+            <Text style={styles.rating}>⭐ {item.rating || '0.0'}</Text>
+            <Text style={styles.price}>
+              {item.is_free ? 'Free' : `₹${item.price || 0}`}
+            </Text>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -193,7 +224,11 @@ const CategoryScreen = ({ route, navigation }) => {
       )}
 
       {/* Books List */}
-      {categoryBooks.length === 0 ? (
+      {loading ? (
+        <View style={[styles.emptyContainer, { padding: 40 }]}>
+          <ActivityIndicator size="large" color={themeColors.primary.main} />
+        </View>
+      ) : categoryBooks.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>📚</Text>
           <Text style={styles.emptyText}>No books found</Text>
@@ -205,7 +240,7 @@ const CategoryScreen = ({ route, navigation }) => {
         <FlatList
           data={categoryBooks}
           renderItem={renderBookItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
           numColumns={2}
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.row}
