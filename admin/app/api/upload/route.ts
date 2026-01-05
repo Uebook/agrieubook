@@ -57,6 +57,7 @@ async function handleFileUpload(request: NextRequest) {
     let finalFileName: string;
     let contentType: string;
     
+    // Type guard for File
     if (file instanceof File) {
       // Web File object
       const arrayBuffer = await file.arrayBuffer();
@@ -64,11 +65,18 @@ async function handleFileUpload(request: NextRequest) {
       finalFileName = file.name || fileName;
       contentType = file.type || fileType;
     } else {
-      // React Native sends as Blob - read it directly
-      const arrayBuffer = await (file as Blob).arrayBuffer();
-      fileBuffer = Buffer.from(arrayBuffer);
-      finalFileName = fileName;
-      contentType = fileType;
+      // React Native sends as Blob or File-like object
+      // Convert to Blob first to ensure we can call arrayBuffer()
+      const blob = file as unknown as Blob;
+      if (blob && typeof blob.arrayBuffer === 'function') {
+        const arrayBuffer = await blob.arrayBuffer();
+        fileBuffer = Buffer.from(arrayBuffer);
+        finalFileName = fileName;
+        contentType = fileType;
+      } else {
+        // Fallback: if it's a string or other type, try to convert
+        throw new Error('Unsupported file type. Expected File or Blob.');
+      }
     }
     
     // Generate unique file name
