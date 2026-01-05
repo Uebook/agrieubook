@@ -3,7 +3,7 @@
  * For authors to upload their books with progress tracking
  */
 
-import React, { useState, useMemo, useCallback, memo } from 'react';
+import React, { useState, useMemo, useCallback, memo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  InteractionManager,
 } from 'react-native';
 import DocumentPicker from 'react-native-document-picker';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
@@ -37,6 +38,7 @@ const BookUploadScreen = ({ navigation }) => {
   const { userId } = useAuth();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
+  const isMountedRef = useRef(true);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [coverImages, setCoverImages] = useState([]); // Array of { id, uri, name, type, file }
@@ -52,6 +54,13 @@ const BookUploadScreen = ({ navigation }) => {
     pages: '',
     isbn: '',
   });
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const handleInputChange = useCallback((field, value) => {
     setFormData((prev) => ({
@@ -85,89 +94,145 @@ const BookUploadScreen = ({ navigation }) => {
   };
 
   const selectImageFromCamera = async () => {
-    const hasPermission = await requestPermissionWithFallback(
-      PERMISSIONS.CAMERA,
-      'Camera'
-    );
-    if (!hasPermission) {
-      return;
-    }
+    try {
+      // Wait for interactions to complete to ensure activity is ready
+      await new Promise((resolve) => {
+        InteractionManager.runAfterInteractions(() => {
+          // Add small delay to ensure activity is ready
+          setTimeout(resolve, 100);
+        });
+      });
 
-    launchCamera(
-      {
-        mediaType: 'photo',
-        quality: 0.8,
-        maxWidth: 2000,
-        maxHeight: 2000,
-      },
-      (response) => {
-        if (response.didCancel) {
-          return;
-        }
-        if (response.errorMessage) {
-          Alert.alert('Error', response.errorMessage);
-          return;
-        }
-        if (response.assets && response.assets[0]) {
-          const asset = response.assets[0];
-          const newImage = {
-            id: Date.now().toString(),
-            uri: asset.uri || '',
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || `cover_${Date.now()}.jpg`,
-            file: {
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      const hasPermission = await requestPermissionWithFallback(
+        PERMISSIONS.CAMERA,
+        'Camera'
+      );
+      if (!hasPermission) {
+        return;
+      }
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      launchCamera(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+          maxWidth: 2000,
+          maxHeight: 2000,
+        },
+        (response) => {
+          if (!isMountedRef.current) {
+            return;
+          }
+          if (response.didCancel) {
+            return;
+          }
+          if (response.errorMessage) {
+            Alert.alert('Error', response.errorMessage);
+            return;
+          }
+          if (response.assets && response.assets[0]) {
+            const asset = response.assets[0];
+            const newImage = {
+              id: Date.now().toString(),
               uri: asset.uri || '',
               type: asset.type || 'image/jpeg',
               name: asset.fileName || `cover_${Date.now()}.jpg`,
-            },
-          };
-          setCoverImages([...coverImages, newImage]);
+              file: {
+                uri: asset.uri || '',
+                type: asset.type || 'image/jpeg',
+                name: asset.fileName || `cover_${Date.now()}.jpg`,
+              },
+            };
+            setCoverImages((prev) => [...prev, newImage]);
+          }
         }
-      }
-    );
+      );
+    } catch (err) {
+      console.error('Error launching camera:', err);
+      Alert.alert(
+        'Error',
+        `Failed to open camera: ${err?.message || 'Unknown error'}\n\nPlease try again.`,
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const selectImageFromGallery = async () => {
-    const hasPermission = await requestPermissionWithFallback(
-      PERMISSIONS.STORAGE,
-      'Storage'
-    );
-    if (!hasPermission) {
-      return;
-    }
+    try {
+      // Wait for interactions to complete to ensure activity is ready
+      await new Promise((resolve) => {
+        InteractionManager.runAfterInteractions(() => {
+          // Add small delay to ensure activity is ready
+          setTimeout(resolve, 100);
+        });
+      });
 
-    launchImageLibrary(
-      {
-        mediaType: 'photo',
-        quality: 0.8,
-        selectionLimit: 10, // Allow multiple images
-        maxWidth: 2000,
-        maxHeight: 2000,
-      },
-      (response) => {
-        if (response.didCancel) {
-          return;
-        }
-        if (response.errorMessage) {
-          Alert.alert('Error', response.errorMessage);
-          return;
-        }
-        if (response.assets && response.assets.length > 0) {
-          const newImages = response.assets.map((asset, index) => ({
-            id: `${Date.now()}_${index}`,
-            uri: asset.uri || '',
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || `cover_${Date.now()}_${index}.jpg`,
-            file: {
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      const hasPermission = await requestPermissionWithFallback(
+        PERMISSIONS.STORAGE,
+        'Storage'
+      );
+      if (!hasPermission) {
+        return;
+      }
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      launchImageLibrary(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+          selectionLimit: 10, // Allow multiple images
+          maxWidth: 2000,
+          maxHeight: 2000,
+        },
+        (response) => {
+          if (!isMountedRef.current) {
+            return;
+          }
+          if (response.didCancel) {
+            return;
+          }
+          if (response.errorMessage) {
+            Alert.alert('Error', response.errorMessage);
+            return;
+          }
+          if (response.assets && response.assets.length > 0) {
+            const newImages = response.assets.map((asset, index) => ({
+              id: `${Date.now()}_${index}`,
               uri: asset.uri || '',
               type: asset.type || 'image/jpeg',
               name: asset.fileName || `cover_${Date.now()}_${index}.jpg`,
-            },
-          }));
-          setCoverImages([...coverImages, ...newImages]);
+              file: {
+                uri: asset.uri || '',
+                type: asset.type || 'image/jpeg',
+                name: asset.fileName || `cover_${Date.now()}_${index}.jpg`,
+              },
+            }));
+            setCoverImages((prev) => [...prev, ...newImages]);
+          }
         }
-      }
-    );
+      );
+    } catch (err) {
+      console.error('Error launching image library:', err);
+      Alert.alert(
+        'Error',
+        `Failed to open gallery: ${err?.message || 'Unknown error'}\n\nPlease try again.`,
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const removeImage = (imageId) => {
@@ -176,6 +241,18 @@ const BookUploadScreen = ({ navigation }) => {
 
   const handleDocumentPicker = async () => {
     try {
+      // Wait for interactions to complete to ensure activity is ready
+      await new Promise((resolve) => {
+        InteractionManager.runAfterInteractions(() => {
+          // Add small delay to ensure activity is ready
+          setTimeout(resolve, 100);
+        });
+      });
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
       // On Android 13+, document picker doesn't need storage permission
       // It uses the system file picker which doesn't require explicit permission
       if (needsStoragePermissionForDocuments()) {
@@ -188,10 +265,18 @@ const BookUploadScreen = ({ navigation }) => {
         }
       }
 
+      if (!isMountedRef.current) {
+        return;
+      }
+
       const result = await DocumentPicker.pick({
         type: [DocumentPicker.types.pdf, DocumentPicker.types.plainText],
         copyTo: 'cachesDirectory',
       });
+
+      if (!isMountedRef.current) {
+        return;
+      }
 
       if (result && result[0]) {
         const file = result[0];
@@ -213,13 +298,30 @@ const BookUploadScreen = ({ navigation }) => {
         return;
       } else {
         console.error('Error picking document:', err);
-        Alert.alert('Error', 'Failed to select file. Please try again.');
+        const errorMessage = err?.message || 'Unknown error';
+        Alert.alert(
+          'Error',
+          `Failed to select file: ${errorMessage}\n\nPlease try again.`,
+          [{ text: 'OK' }]
+        );
       }
     }
   };
 
   const handleAudioPicker = async () => {
     try {
+      // Wait for interactions to complete to ensure activity is ready
+      await new Promise((resolve) => {
+        InteractionManager.runAfterInteractions(() => {
+          // Add small delay to ensure activity is ready
+          setTimeout(resolve, 100);
+        });
+      });
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
       // On Android 13+, document picker doesn't need storage permission
       if (needsStoragePermissionForDocuments()) {
         const hasPermission = await requestPermissionWithFallback(
@@ -229,6 +331,10 @@ const BookUploadScreen = ({ navigation }) => {
         if (!hasPermission) {
           return;
         }
+      }
+
+      if (!isMountedRef.current) {
+        return;
       }
 
       const result = await DocumentPicker.pick({
@@ -241,6 +347,10 @@ const BookUploadScreen = ({ navigation }) => {
         ],
         copyTo: 'cachesDirectory',
       });
+
+      if (!isMountedRef.current) {
+        return;
+      }
 
       if (result && result[0]) {
         const file = result[0];
@@ -262,7 +372,12 @@ const BookUploadScreen = ({ navigation }) => {
         return;
       } else {
         console.error('Error picking audio:', err);
-        Alert.alert('Error', 'Failed to select audio file. Please try again.');
+        const errorMessage = err?.message || 'Unknown error';
+        Alert.alert(
+          'Error',
+          `Failed to select audio file: ${errorMessage}\n\nPlease try again.`,
+          [{ text: 'OK' }]
+        );
       }
     }
   };
