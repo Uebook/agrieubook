@@ -45,9 +45,20 @@ async function handleFileUpload(request: NextRequest) {
     const fileName = (formData.get('fileName') as string) || 'file';
     const fileType = (formData.get('fileType') as string) || 'application/octet-stream';
     
+    // Debug logging
+    console.log('Upload request received:', {
+      hasFile: !!file,
+      fileTypeOf: typeof file,
+      fileConstructor: file?.constructor?.name,
+      bucket,
+      folder,
+      fileName,
+      mimeType: fileType,
+    });
+    
     if (!file || !bucket) {
       return NextResponse.json(
-        { error: 'Missing file or bucket' },
+        { error: 'Missing file or bucket', details: { hasFile: !!file, bucket } },
         { status: 400 }
       );
     }
@@ -61,12 +72,22 @@ async function handleFileUpload(request: NextRequest) {
       // Type guard for File (web)
       const fileObj = file as unknown;
       
+      console.log('Processing file:', {
+        isFile: fileObj instanceof File,
+        isBlob: fileObj instanceof Blob,
+        type: typeof fileObj,
+        constructor: fileObj?.constructor?.name,
+        hasArrayBuffer: typeof (fileObj as any)?.arrayBuffer === 'function',
+      });
+      
       if (fileObj instanceof File) {
         // Web File object
+        console.log('Reading as File object');
         const arrayBuffer = await fileObj.arrayBuffer();
         fileBuffer = Buffer.from(arrayBuffer);
         finalFileName = fileObj.name || fileName;
         contentType = fileObj.type || fileType;
+        console.log('File read successfully:', { size: fileBuffer.length, finalFileName, contentType });
       } else {
         // For React Native or other sources, try multiple approaches
         let arrayBuffer: ArrayBuffer | null = null;
@@ -108,30 +129,57 @@ async function handleFileUpload(request: NextRequest) {
         }
         
         if (arrayBuffer) {
+          console.log('File read via arrayBuffer method');
           fileBuffer = Buffer.from(arrayBuffer);
           finalFileName = fileName;
           contentType = fileType;
+          console.log('File buffer created:', { size: fileBuffer.length });
         } else {
-          // Last resort: try as string (base64 or plain)
-          const fileString = fileObj as string;
-          if (typeof fileString === 'string') {
-            if (fileString.startsWith('data:')) {
-              const base64Data = fileString.split(',')[1];
-              fileBuffer = Buffer.from(base64Data, 'base64');
-            } else {
-              fileBuffer = Buffer.from(fileString, 'utf-8');
-            }
+          // React Native FormData sends files as File-like objects
+          // Try to convert to Blob first, then read
+          console.log('Trying alternative file reading methods...');
+          
+          // Try: Convert to Blob if possible
+          try {
+            const blob = new Blob([fileObj as any]);
+            const arrayBuffer = await blob.arrayBuffer();
+            fileBuffer = Buffer.from(arrayBuffer);
             finalFileName = fileName;
             contentType = fileType;
-          } else {
-            throw new Error(`Unsupported file type. Got: ${typeof fileObj}`);
+            console.log('File read via Blob conversion:', { size: fileBuffer.length });
+          } catch (blobError) {
+            console.error('Blob conversion failed:', blobError);
+            // Last resort: try as string (base64 or plain)
+            const fileString = fileObj as string;
+            if (typeof fileString === 'string') {
+              if (fileString.startsWith('data:')) {
+                const base64Data = fileString.split(',')[1];
+                fileBuffer = Buffer.from(base64Data, 'base64');
+              } else {
+                fileBuffer = Buffer.from(fileString, 'utf-8');
+              }
+              finalFileName = fileName;
+              contentType = fileType;
+              console.log('File read as string:', { size: fileBuffer.length });
+            } else {
+              throw new Error(`Unsupported file type. Got: ${typeof fileObj}, constructor: ${fileObj?.constructor?.name || 'unknown'}`);
+            }
           }
         }
       }
     } catch (readError: any) {
       console.error('Error reading file:', readError);
+      console.error('File object details:', {
+        type: typeof file,
+        constructor: file?.constructor?.name,
+        keys: file ? Object.keys(file) : [],
+      });
       return NextResponse.json(
-        { error: 'Failed to read file: ' + (readError.message || 'Unknown error') },
+        { 
+          error: 'Failed to read file: ' + (readError.message || 'Unknown error'),
+          details: readError.stack || 'No stack trace',
+          fileType: typeof file,
+        },
         { status: 400 }
       );
     }
