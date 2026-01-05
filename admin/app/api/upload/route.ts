@@ -52,31 +52,88 @@ async function handleFileUpload(request: NextRequest) {
       );
     }
     
-    // Read file as ArrayBuffer (works for both File and Blob from React Native)
+    // Read file as Buffer (works for both File and React Native FormData)
     let fileBuffer: Buffer;
     let finalFileName: string;
     let contentType: string;
     
-    // Type guard for File
-    if (file instanceof File) {
-      // Web File object
-      const arrayBuffer = await file.arrayBuffer();
-      fileBuffer = Buffer.from(arrayBuffer);
-      finalFileName = file.name || fileName;
-      contentType = file.type || fileType;
-    } else {
-      // React Native sends as Blob or File-like object
-      // Convert to Blob first to ensure we can call arrayBuffer()
-      const blob = file as unknown as Blob;
-      if (blob && typeof blob.arrayBuffer === 'function') {
-        const arrayBuffer = await blob.arrayBuffer();
+    try {
+      // Type guard for File (web)
+      const fileObj = file as unknown;
+      
+      if (fileObj instanceof File) {
+        // Web File object
+        const arrayBuffer = await fileObj.arrayBuffer();
         fileBuffer = Buffer.from(arrayBuffer);
-        finalFileName = fileName;
-        contentType = fileType;
+        finalFileName = fileObj.name || fileName;
+        contentType = fileObj.type || fileType;
       } else {
-        // Fallback: if it's a string or other type, try to convert
-        throw new Error('Unsupported file type. Expected File or Blob.');
+        // For React Native or other sources, try multiple approaches
+        let arrayBuffer: ArrayBuffer | null = null;
+        
+        // Try 1: Check if it has arrayBuffer method (Blob-like)
+        const blobLike = fileObj as { arrayBuffer?: () => Promise<ArrayBuffer> };
+        if (blobLike && typeof blobLike.arrayBuffer === 'function') {
+          arrayBuffer = await blobLike.arrayBuffer();
+        }
+        // Try 2: Check if it's a Blob
+        else if (fileObj instanceof Blob) {
+          arrayBuffer = await fileObj.arrayBuffer();
+        }
+        // Try 3: Check if it's a ReadableStream
+        else {
+          const stream = fileObj as ReadableStream<Uint8Array>;
+          if (stream && typeof stream.getReader === 'function') {
+            const chunks: Uint8Array[] = [];
+            const reader = stream.getReader();
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                if (value) chunks.push(value);
+              }
+              // Convert chunks to single buffer
+              const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+              const combined = new Uint8Array(totalLength);
+              let offset = 0;
+              for (const chunk of chunks) {
+                combined.set(chunk, offset);
+                offset += chunk.length;
+              }
+              arrayBuffer = combined.buffer;
+            } finally {
+              reader.releaseLock();
+            }
+          }
+        }
+        
+        if (arrayBuffer) {
+          fileBuffer = Buffer.from(arrayBuffer);
+          finalFileName = fileName;
+          contentType = fileType;
+        } else {
+          // Last resort: try as string (base64 or plain)
+          const fileString = fileObj as string;
+          if (typeof fileString === 'string') {
+            if (fileString.startsWith('data:')) {
+              const base64Data = fileString.split(',')[1];
+              fileBuffer = Buffer.from(base64Data, 'base64');
+            } else {
+              fileBuffer = Buffer.from(fileString, 'utf-8');
+            }
+            finalFileName = fileName;
+            contentType = fileType;
+          } else {
+            throw new Error(`Unsupported file type. Got: ${typeof fileObj}`);
+          }
+        }
       }
+    } catch (readError: any) {
+      console.error('Error reading file:', readError);
+      return NextResponse.json(
+        { error: 'Failed to read file: ' + (readError.message || 'Unknown error') },
+        { status: 400 }
+      );
     }
     
     // Generate unique file name
