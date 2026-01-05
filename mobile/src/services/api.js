@@ -163,40 +163,76 @@ class ApiClient {
 
   // Upload API
   async uploadFile(file, bucket, folder) {
-    const formData = new FormData();
-    
-    // Handle file URI - support both file:// and content:// URIs
-    const fileUri = file.uri || file.path;
-    const fileName = file.name || (fileUri ? fileUri.split('/').pop() : 'file.pdf');
-    const fileType = file.type || 'application/pdf';
+    try {
+      // Validate file object
+      if (!file) {
+        throw new Error('File is required');
+      }
 
-    // For React Native, we need to append the file properly
-    formData.append('file', {
-      uri: fileUri,
-      type: fileType,
-      name: fileName,
-    });
-    
-    formData.append('bucket', bucket);
-    if (folder) {
-      formData.append('folder', folder);
+      const formData = new FormData();
+
+      // Handle file URI - support both file:// and content:// URIs
+      const fileUri = file.uri || file.path;
+      if (!fileUri) {
+        throw new Error('File URI is required');
+      }
+
+      const fileName = file.name || (fileUri ? fileUri.split('/').pop() : 'file.pdf');
+      const fileType = file.type || 'application/pdf';
+
+      // React Native FormData: Send file directly using uri, type, and name
+      // React Native automatically reads the file from URI and sends it as binary data
+      const fileObject = {
+        uri: fileUri,
+        type: fileType,
+        name: fileName,
+      };
+      formData.append('file', fileObject);
+
+      // Append metadata
+      formData.append('fileName', fileName);
+      formData.append('fileType', fileType);
+      formData.append('bucket', bucket);
+      if (folder) {
+        formData.append('folder', folder);
+      }
+
+      const url = `${this.baseUrl}/api/upload`;
+      
+      console.log('Uploading file:', { fileName, fileType, bucket, folder, uri: fileUri.substring(0, 50) + '...' });
+      
+      // Send FormData - React Native handles file reading and sending automatically
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
+      });
+
+      console.log('Upload response:', { status: response.status, statusText: response.statusText });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Upload failed response:', errorText);
+        let error;
+        try {
+          error = JSON.parse(errorText);
+        } catch {
+          error = { error: errorText || 'Upload failed' };
+        }
+        throw new Error(error.error || `Upload failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Upload success:', result);
+      return result;
+    } catch (error) {
+      console.error('Upload error:', error);
+      // Provide more helpful error messages
+      if (error.message && error.message.includes('Network request failed')) {
+        throw new Error('Network error: Please check your internet connection and ensure the API server is accessible.');
+      }
+      throw error;
     }
-
-    const url = `${this.baseUrl}/api/upload`;
-    const response = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
-      throw new Error(error.error || 'Upload failed');
-    }
-
-    return await response.json();
   }
 
   // Search API (if you create one)

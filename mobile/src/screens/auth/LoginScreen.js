@@ -75,11 +75,22 @@ const LoginScreen = ({ navigation }) => {
       const response = await apiClient.login(email, password);
       
       if (response.success) {
-        // Navigate to role selection with user data
-        navigation.navigate('RoleSelection', {
-          userData: response.user,
-          emailLogin: true,
-        });
+        // If user already has a role (from registration), login directly
+        // Otherwise, navigate to role selection
+        if (response.user?.role) {
+          // User already has a role, skip role selection
+          navigation.navigate('RoleSelection', {
+            userData: response.user,
+            emailLogin: true,
+            skipSelection: true, // Flag to skip role selection
+          });
+        } else {
+          // New user or user without role, show role selection
+          navigation.navigate('RoleSelection', {
+            userData: response.user,
+            emailLogin: true,
+          });
+        }
       } else {
         Alert.alert('Error', response.error || 'Login failed');
       }

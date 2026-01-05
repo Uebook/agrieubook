@@ -277,6 +277,69 @@ const BookUploadScreen = ({ navigation }) => {
     setUploadProgress(0);
 
     try {
+      // DUMMY DATA MODE: For testing without API
+      const USE_DUMMY_DATA = false; // Set to true to test without API, false to use real API
+      
+      if (USE_DUMMY_DATA) {
+        // Simulate upload progress with realistic steps
+        console.log('📦 Dummy Mode: Simulating book upload...');
+        
+        // Step 1: Upload file (PDF or Audio)
+        setUploadProgress(10);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log('📄 Dummy: File uploaded');
+        
+        // Step 2: Upload cover images
+        if (coverImages.length > 0) {
+          const imageSteps = 60 / coverImages.length;
+          for (let i = 0; i < coverImages.length; i++) {
+            setUploadProgress(20 + (i + 1) * imageSteps);
+            await new Promise(resolve => setTimeout(resolve, 200));
+            console.log(`🖼️ Dummy: Cover image ${i + 1}/${coverImages.length} uploaded`);
+          }
+        } else {
+          setUploadProgress(60);
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        
+        // Step 3: Create book record
+        setUploadProgress(80);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log('✅ Dummy: Book record created');
+        
+        setUploadProgress(100);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        const bookTypeText = bookType === 'book' ? 'Book' : 'Audio Book';
+        Alert.alert(
+          `Success (Dummy Mode)`,
+          `${bookTypeText} uploaded successfully!\n\n📝 Title: ${formData.title}\n📁 Category: ${categories.find(c => c.id === formData.category)?.name || 'N/A'}\n💰 Price: ₹${formData.price || '0'}\n\nNote: This is dummy data mode. The ${bookTypeText.toLowerCase()} was not actually uploaded to the server.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                setFormData({
+                  title: '',
+                  description: '',
+                  category: '',
+                  price: '',
+                  language: 'English',
+                  pages: '',
+                  isbn: '',
+                });
+                setCoverImages([]);
+                setPdfFile(null);
+                setAudioFile(null);
+                setUploadProgress(0);
+                navigation.goBack();
+              },
+            },
+          ]
+        );
+        setIsUploading(false);
+        return;
+      }
+
       let totalSteps = 0;
       let currentStep = 0;
 

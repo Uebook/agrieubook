@@ -3,7 +3,7 @@
  * User selects their role: Reader/Customer or Author/Publisher
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,8 +17,8 @@ import { useAuth } from '../../context/AuthContext';
 
 const RoleSelectionScreen = ({ route, navigation }) => {
   const { login } = useAuth();
-  const { mobileNumber, userData, otpVerified } = route.params || {};
-  const [selectedRole, setSelectedRole] = useState(null);
+  const { mobileNumber, userData, otpVerified, skipSelection, emailLogin } = route.params || {};
+  const [selectedRole, setSelectedRole] = useState(userData?.role || null);
 
   const roles = [
     {
@@ -39,6 +39,28 @@ const RoleSelectionScreen = ({ route, navigation }) => {
     setSelectedRole(roleId);
   };
 
+  const handleAutoLogin = async () => {
+    try {
+      const role = userData.role;
+      const userId = userData.id;
+      const interests = userData.interests || [];
+      
+      await login(role, interests, userId, userData);
+      // Navigation will happen automatically via AuthContext
+    } catch (error) {
+      console.error('Auto-login error:', error);
+      // If auto-login fails, show role selection screen
+    }
+  };
+
+  // Auto-login if user already has a role and skipSelection is true
+  useEffect(() => {
+    if (skipSelection && userData?.role) {
+      handleAutoLogin();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skipSelection, userData?.role, userData?.id]);
+
   const handleContinue = async () => {
     if (!selectedRole) {
       return;
@@ -56,7 +78,7 @@ const RoleSelectionScreen = ({ route, navigation }) => {
         id: userId,
         mobile: mobileNumber,
         name: `User ${mobileNumber?.slice(-4) || ''}`,
-        email: '',
+        email: userData?.email || '',
         interests: interests,
       });
       

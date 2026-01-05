@@ -64,12 +64,24 @@ const OTPScreen = ({ route, navigation }) => {
       const response = await apiClient.verifyOTP(mobileNumber, otpString);
       
       if (response.success) {
-        // Navigate to role selection with user data from API
-        navigation.navigate('RoleSelection', { 
-          mobileNumber,
-          userData: response.user,
-          otpVerified: true,
-        });
+        // If user already has a role (from registration), login directly
+        // Otherwise, navigate to role selection
+        if (response.user?.role) {
+          // User already has a role, skip role selection
+          navigation.navigate('RoleSelection', {
+            mobileNumber,
+            userData: response.user,
+            otpVerified: true,
+            skipSelection: true, // Flag to skip role selection
+          });
+        } else {
+          // New user or user without role, show role selection
+          navigation.navigate('RoleSelection', {
+            mobileNumber,
+            userData: response.user,
+            otpVerified: true,
+          });
+        }
       } else {
         Alert.alert('Error', response.error || 'Invalid OTP. Please try again.');
       }
