@@ -20,7 +20,7 @@ import {
 import DocumentPicker from 'react-native-document-picker';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import Header from '../../components/common/Header';
-import { categories } from '../../services/dummyData';
+import { categories as dummyCategories } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
@@ -45,6 +45,8 @@ const BookUploadScreen = ({ navigation }) => {
   const [pdfFile, setPdfFile] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
   const [bookType, setBookType] = useState('book'); // 'book' or 'audio'
+  const [categories, setCategories] = useState(dummyCategories); // Start with dummy data, fetch from API
+  const [loadingCategories, setLoadingCategories] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -54,6 +56,31 @@ const BookUploadScreen = ({ navigation }) => {
     pages: '',
     isbn: '',
   });
+
+  // Fetch categories from API on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setLoadingCategories(true);
+        const response = await apiClient.getCategories();
+        if (response?.categories && response.categories.length > 0) {
+          // Map API categories to match expected format
+          const mappedCategories = response.categories.map((cat) => ({
+            id: cat.id,
+            name: cat.name,
+            icon: cat.icon || '📚',
+          }));
+          setCategories(mappedCategories);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        // Keep dummy categories as fallback
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -412,7 +439,11 @@ const BookUploadScreen = ({ navigation }) => {
               name: pdfFile.name || 'book.pdf',
             };
             const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
-            pdfUrl = pdfResult.url;
+            // Handle response structure - API returns { success: true, url: ..., path: ... }
+            pdfUrl = pdfResult?.url || pdfResult?.data?.url || null;
+            if (!pdfUrl) {
+              throw new Error('Upload succeeded but no URL returned in response');
+            }
             currentStep++;
             setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           } catch (uploadError) {
@@ -442,10 +473,16 @@ const BookUploadScreen = ({ navigation }) => {
               imageUploadPromises.push(
                 apiClient.uploadFile(imageFile, 'books', 'covers', userId)
                   .then((result) => {
-                    coverImageUrls.push(result.url);
-                    currentStep++;
-                    setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-                    console.log(`Cover image ${i + 1} uploaded successfully:`, result.url);
+                    // Handle response structure - API returns { success: true, url: ..., path: ... }
+                    const imageUrl = result?.url || result?.data?.url;
+                    if (imageUrl) {
+                      coverImageUrls.push(imageUrl);
+                      currentStep++;
+                      setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                      console.log(`Cover image ${i + 1} uploaded successfully:`, imageUrl);
+                    } else {
+                      throw new Error('Upload succeeded but no URL returned in response');
+                    }
                   })
                   .catch((uploadError) => {
                     console.error(`Cover image ${i + 1} upload failed:`, uploadError);
@@ -526,7 +563,11 @@ const BookUploadScreen = ({ navigation }) => {
               name: audioFile.name || 'audio.mp3',
             };
             const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio', userId);
-            audioUrl = audioResult.url;
+            // Handle response structure - API returns { success: true, url: ..., path: ... }
+            audioUrl = audioResult?.url || audioResult?.data?.url || null;
+            if (!audioUrl) {
+              throw new Error('Upload succeeded but no URL returned in response');
+            }
             currentStep++;
             setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           } catch (uploadError) {
@@ -551,10 +592,16 @@ const BookUploadScreen = ({ navigation }) => {
               imageUploadPromises.push(
                 apiClient.uploadFile(imageFile, 'audio-books', 'covers', userId)
                   .then((result) => {
-                    coverImageUrls.push(result.url);
-                    currentStep++;
-                    setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-                    console.log(`Cover image ${i + 1} uploaded successfully:`, result.url);
+                    // Handle response structure - API returns { success: true, url: ..., path: ... }
+                    const imageUrl = result?.url || result?.data?.url;
+                    if (imageUrl) {
+                      coverImageUrls.push(imageUrl);
+                      currentStep++;
+                      setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                      console.log(`Cover image ${i + 1} uploaded successfully:`, imageUrl);
+                    } else {
+                      throw new Error('Upload succeeded but no URL returned in response');
+                    }
                   })
                   .catch((uploadError) => {
                     console.error(`Cover image ${i + 1} upload failed:`, uploadError);

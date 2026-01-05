@@ -159,9 +159,7 @@ class ApiClient {
 
   // Categories API (if you create one)
   async getCategories() {
-    // For now, return empty or use dummy data
-    // You can create /api/categories endpoint later
-    return { categories: [] };
+    return this.request('/api/categories');
   }
 
   // Upload API
