@@ -27,7 +27,7 @@ export default function EditCategoryPage() {
   const fetchCategory = async () => {
     try {
       setFetching(true);
-      const response = await apiClient.request<{ category: any }>(`/api/categories/${categoryId}`);
+      const response = await apiClient.getCategory(categoryId);
       const category = response.category;
       setFormData({
         name: category.name || '',

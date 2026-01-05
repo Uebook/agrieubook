@@ -210,6 +210,10 @@ class ApiClient {
     return this.request<{ categories: any[] }>('/api/categories');
   }
 
+  async getCategory(id: string) {
+    return this.request<{ category: any }>(`/api/categories/${id}`);
+  }
+
   async createCategory(data: {
     name: string;
     description?: string;
