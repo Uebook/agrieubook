@@ -14,12 +14,13 @@ import {
 } from 'react-native';
 import Colors from '../../../color';
 import { useAuth } from '../../context/AuthContext';
-import { categories as categoryData } from '../../services/dummyData';
+import { useCategories } from '../../context/CategoriesContext';
 
 const OnboardingScreen = ({ route, navigation }) => {
   const { role } = route.params || {};
   const [selectedCategories, setSelectedCategories] = useState([]);
   const { login, userData } = useAuth();
+  const { categories: categoryData } = useCategories();
 
   const categories = categoryData.map((cat) => cat.name);
 

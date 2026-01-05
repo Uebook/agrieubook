@@ -20,12 +20,13 @@ import {
 import Colors from '../../../color';
 import apiClient from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { categories as categoryData } from '../../services/dummyData';
+import { useCategories } from '../../context/CategoriesContext';
 import { useSettings } from '../../context/SettingsContext';
 
 const RegisterScreen = ({ navigation }) => {
   const { login } = useAuth();
   const { getThemeColors } = useSettings();
+  const { categories: categoryData } = useCategories();
   const themeColors = getThemeColors();
   const [formData, setFormData] = useState({
     name: '',

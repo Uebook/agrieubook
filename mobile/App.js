@@ -15,6 +15,7 @@ import SplashScreen from './src/components/common/SplashScreen';
 import AppStatusBar from './src/components/common/AppStatusBar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { SettingsProvider } from './src/context/SettingsContext';
+import { CategoriesProvider } from './src/context/CategoriesContext';
 import Colors from './color';
 
 function AppContent() {
@@ -37,12 +38,14 @@ function App() {
     return (
         <AuthProvider>
             <SettingsProvider>
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                    <SafeAreaProvider>
-                        <AppStatusBar />
-                        <AppContent />
-                    </SafeAreaProvider>
-                </GestureHandlerRootView>
+                <CategoriesProvider>
+                    <GestureHandlerRootView style={{ flex: 1 }}>
+                        <SafeAreaProvider>
+                            <AppStatusBar />
+                            <AppContent />
+                        </SafeAreaProvider>
+                    </GestureHandlerRootView>
+                </CategoriesProvider>
             </SettingsProvider>
         </AuthProvider>
     );

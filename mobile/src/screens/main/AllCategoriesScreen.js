@@ -12,27 +12,30 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Header from '../../components/common/Header';
-import { categories, getBooksByCategory } from '../../services/dummyData';
+import { getBooksByCategory } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
+import { useCategories } from '../../context/CategoriesContext';
 import apiClient from '../../services/api';
 
 const AllCategoriesScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier, t } = useSettings();
+  const { categories: categoriesList, loading: categoriesLoading } = useCategories();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
-  const [categoriesList, setCategoriesList] = useState(categories);
   const [categoryBookCounts, setCategoryBookCounts] = useState({});
   const [loading, setLoading] = useState(false);
 
   // Fetch book counts for each category
   useEffect(() => {
+    if (!categoriesList || categoriesList.length === 0) return;
+    
     const fetchCategoryCounts = async () => {
       try {
         setLoading(true);
         const counts = {};
         
         // Fetch book count for each category
-        for (const category of categories) {
+        for (const category of categoriesList) {
           try {
             const response = await apiClient.getBooks({
               category: category.id,
@@ -56,7 +59,7 @@ const AllCategoriesScreen = ({ navigation }) => {
     };
 
     fetchCategoryCounts();
-  }, []);
+  }, [categoriesList]);
 
   const styles = StyleSheet.create({
     container: {
@@ -118,7 +121,7 @@ const AllCategoriesScreen = ({ navigation }) => {
         title={t('browseCategories') || 'Browse Categories'}
         navigation={navigation}
       />
-      {loading ? (
+      {loading || categoriesLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
           <ActivityIndicator size="large" color={themeColors.primary.main} />
         </View>
