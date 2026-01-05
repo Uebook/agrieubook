@@ -4,11 +4,11 @@ import { createServerClient } from '@/lib/supabase/client';
 // GET /api/books/[id]/download - Get signed URL for PDF download
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
     
     // Get book PDF URL
     const { data: book, error } = await supabase

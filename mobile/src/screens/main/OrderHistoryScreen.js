@@ -2,7 +2,7 @@
  * Order History Screen
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,16 +11,41 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  ActivityIndicator,
 } from 'react-native';
-import { orders } from '../../services/dummyData';
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const OrderHistoryScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
+  const { userId } = useAuth();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        const response = await apiClient.getOrders(userId);
+        setOrders(response.orders || []);
+      } catch (error) {
+        console.error('Error fetching orders:', error);
+        setOrders([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
+  }, [userId]);
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -261,6 +286,17 @@ const OrderHistoryScreen = ({ navigation }) => {
       </View>
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Header title="Order History" navigation={navigation} />
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={themeColors.primary.main} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

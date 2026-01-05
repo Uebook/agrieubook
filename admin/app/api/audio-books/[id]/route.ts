@@ -4,11 +4,11 @@ import { createServerClient } from '@/lib/supabase/client';
 // GET /api/audio-books/:id - Get single audio book by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
 
     const { data: audioBook, error } = await supabase
       .from('audio_books')
@@ -48,11 +48,11 @@ export async function GET(
 // PUT /api/audio-books/:id - Update audio book
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     const {
@@ -108,11 +108,11 @@ export async function PUT(
 // DELETE /api/audio-books/:id - Delete audio book
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
 
     const { error } = await supabase
       .from('audio_books')

@@ -20,8 +20,6 @@ import {
   trendingBooks,
   recommendedBooks,
   categories,
-  userProfile,
-  notifications,
   getAudioBooks,
   books,
   getBooksByAuthor,
@@ -31,7 +29,7 @@ import { useSettings } from '../../context/SettingsContext';
 import apiClient from '../../services/api';
 
 const HomeScreen = ({ navigation }) => {
-  const { userRole, userId } = useAuth();
+  const { userRole, userId, userData } = useAuth();
   const { t, getThemeColors, getFontSizeMultiplier } = useSettings();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
@@ -39,8 +37,13 @@ const HomeScreen = ({ navigation }) => {
   const [allBooks, setAllBooks] = useState([]);
   const [allAudioBooks, setAllAudioBooks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState([]);
+  const [userRating, setUserRating] = useState(0);
+  
+  // Ensure userData is safely accessed
+  const safeUserData = userData || {};
 
-  // Fetch books and audio books from API
+  // Fetch books, audio books, notifications, and user data from API
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -52,15 +55,32 @@ const HomeScreen = ({ navigation }) => {
           ? { author: userId, limit: 100 } // Get all books by this author
           : { status: 'published', limit: 50 };
         
-        const [booksResponse, audioBooksResponse] = await Promise.all([
+        const promises = [
           apiClient.getBooks(params),
           apiClient.getAudioBooks(isAuthor && userId ? { author: userId, limit: 100 } : { limit: 50 }),
-        ]);
+        ];
+
+        // Fetch notifications if user is logged in
+        if (userId) {
+          promises.push(apiClient.getNotifications(userId, 'all'));
+          // Fetch user data to get rating
+          promises.push(apiClient.getUser(userId));
+        }
         
-        setAllBooks(booksResponse.books || []);
-        setAllAudioBooks(audioBooksResponse.audioBooks || []);
+        const results = await Promise.all(promises);
+        
+        setAllBooks(results[0].books || []);
+        setAllAudioBooks(results[1].audioBooks || []);
+        
+        if (userId && results[2]) {
+          setNotifications(results[2].notifications || []);
+        }
+        if (userId && results[3] && results[3].user) {
+          // Calculate or get user rating (you might need to add rating to user model)
+          setUserRating(results[3].user.rating || 0);
+        }
       } catch (error) {
-        console.error('Error fetching books:', error);
+        console.error('Error fetching data:', error);
         // Fallback to dummy data on error
         let fallbackBooks = books;
         let fallbackAudio = getAudioBooks();
@@ -113,8 +133,15 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const getUserName = () => {
-    // Get first name from userProfile
-    return userProfile.name.split(' ')[0];
+    // Get first name from userData or fallback
+    try {
+      if (safeUserData && safeUserData.name && typeof safeUserData.name === 'string') {
+        return safeUserData.name.split(' ')[0];
+      }
+    } catch (error) {
+      console.error('Error getting user name:', error);
+    }
+    return 'User';
   };
 
   const getUnreadNotificationCount = () => {
@@ -186,6 +213,28 @@ const HomeScreen = ({ navigation }) => {
       fontWeight: 'bold',
       color: themeColors.text.primary,
     },
+    userNameContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    ratingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: themeColors.background.secondary,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    ratingStar: {
+      fontSize: 14 * fontSizeMultiplier,
+      marginRight: 2,
+    },
+    ratingText: {
+      fontSize: 12 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.primary,
+    },
     sectionTitle: {
       fontSize: 20 * fontSizeMultiplier,
       fontWeight: 'bold',
@@ -216,7 +265,15 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.headerTop}>
           <View style={styles.greetingContainer}>
             <Text style={dynamicStyles.greeting}>{getGreeting()},</Text>
-            <Text style={dynamicStyles.userName}>{getUserName()} 👋</Text>
+            <View style={styles.userNameContainer}>
+              <Text style={dynamicStyles.userName}>{getUserName()} 👋</Text>
+              {userRating > 0 && (
+                <View style={styles.ratingContainer}>
+                  <Text style={styles.ratingStar}>⭐</Text>
+                  <Text style={styles.ratingText}>{userRating.toFixed(1)}</Text>
+                </View>
+              )}
+            </View>
           </View>
           <TouchableOpacity
             style={styles.notificationButton}

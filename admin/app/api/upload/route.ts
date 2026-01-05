@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       uploadUrl: uploadData.signedUrl,
       path: uniqueFileName,
       token: uploadData.token,
-      expiresAt: uploadData.expiresAt,
+      expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
     });
   } catch (error) {
     console.error('Error in POST /api/upload:', error);

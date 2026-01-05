@@ -78,22 +78,29 @@ export async function POST(request: NextRequest) {
     // const passwordHash = await bcrypt.hash(password, 10);
     
     // Create new user
+    const userData: any = {
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      mobile: mobile.trim(),
+      role: userRole,
+      status: 'active',
+      // password_hash: passwordHash, // Uncomment when implementing password hashing
+    };
+    
+    // Add interests only if column exists (handle gracefully if not)
+    if (interests && Array.isArray(interests) && interests.length > 0) {
+      userData.interests = interests;
+    }
+    
     const { data: newUser, error: createError } = await supabase
       .from('users')
-      .insert({
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        mobile: mobile.trim(),
-        role: userRole,
-        status: 'active',
-        interests: interests || [], // Store selected category IDs as array
-        // password_hash: passwordHash, // Uncomment when implementing password hashing
-      })
+      .insert(userData)
       .select()
       .single();
     
     if (createError) {
       console.error('Error creating user:', createError);
+      console.error('Error details:', JSON.stringify(createError, null, 2));
       
       // Handle unique constraint violations
       if (createError.code === '23505') {
@@ -103,8 +110,22 @@ export async function POST(request: NextRequest) {
         );
       }
       
+      // Handle column doesn't exist error
+      if (createError.message?.includes('column') && createError.message?.includes('does not exist')) {
+        return NextResponse.json(
+          { 
+            error: 'Database column missing. Please run: ALTER TABLE users ADD COLUMN interests TEXT[] DEFAULT \'{}\';',
+            details: createError.message 
+          },
+          { status: 500 }
+        );
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to create account. Please try again.' },
+        { 
+          error: 'Failed to create account. Please try again.',
+          details: createError.message || 'Unknown error'
+        },
         { status: 500 }
       );
     }

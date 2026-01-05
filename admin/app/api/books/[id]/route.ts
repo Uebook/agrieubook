@@ -4,11 +4,11 @@ import { createServerClient } from '@/lib/supabase/client';
 // GET /api/books/:id - Get single book by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
 
     const { data: book, error } = await supabase
       .from('books')
@@ -48,11 +48,11 @@ export async function GET(
 // PUT /api/books/:id - Update book
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     const {
@@ -120,11 +120,11 @@ export async function PUT(
 // DELETE /api/books/:id - Delete book
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createServerClient();
-    const { id } = params;
+    const { id } = await params;
 
     const { error } = await supabase
       .from('books')

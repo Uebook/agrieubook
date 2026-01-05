@@ -3,7 +3,7 @@
  * Displays all user notifications
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,17 +11,21 @@ import {
   FlatList,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import Header from '../../components/common/Header';
-import { notifications } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const NotificationsScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
-  const [notificationsList, setNotificationsList] = useState(notifications);
+  const { userId } = useAuth();
+  const [notificationsList, setNotificationsList] = useState([]);
   const [filter, setFilter] = useState('all'); // 'all', 'unread', 'read'
+  const [loading, setLoading] = useState(true);
 
   const filteredNotifications = useMemo(() => {
     if (filter === 'unread') {
@@ -36,18 +40,49 @@ const NotificationsScreen = ({ navigation }) => {
     return notificationsList.filter((notif) => !notif.isRead).length;
   }, [notificationsList]);
 
-  const markAsRead = (id) => {
-    setNotificationsList((prev) =>
-      prev.map((notif) =>
-        notif.id === id ? { ...notif, isRead: true } : notif
-      )
-    );
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        const response = await apiClient.getNotifications(userId, filter);
+        setNotificationsList(response.notifications || []);
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+        setNotificationsList([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchNotifications();
+  }, [userId, filter]);
+
+  const markAsRead = async (id) => {
+    try {
+      await apiClient.markNotificationAsRead(id);
+      setNotificationsList((prev) =>
+        prev.map((notif) =>
+          notif.id === id ? { ...notif, isRead: true } : notif
+        )
+      );
+    } catch (error) {
+      console.error('Error marking as read:', error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotificationsList((prev) =>
-      prev.map((notif) => ({ ...notif, isRead: true }))
-    );
+  const markAllAsRead = async () => {
+    if (!userId) return;
+    try {
+      await apiClient.markAllNotificationsAsRead(userId);
+      setNotificationsList((prev) =>
+        prev.map((notif) => ({ ...notif, isRead: true }))
+      );
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+    }
   };
 
   const handleNotificationPress = (notification) => {
@@ -248,6 +283,17 @@ const NotificationsScreen = ({ navigation }) => {
       )}
     </TouchableOpacity>
   );
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Header title="Notifications" navigation={navigation} />
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={themeColors.primary.main} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

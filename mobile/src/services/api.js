@@ -3,10 +3,10 @@
  * Handles all API requests to Next.js API routes
  */
 
-// API Base URL - Change this to your production URL
-const API_BASE_URL = __DEV__ 
-  ? 'http://localhost:3000' // Development (change to your local IP for physical device)
-  : 'https://your-production-url.com'; // Production
+// API Base URL - Using Vercel deployment URL
+// Production URL: https://admin-orcin-omega.vercel.app
+// Using Vercel URL for both development and production
+const API_BASE_URL = 'https://admin-orcin-omega.vercel.app';
 
 class ApiClient {
   constructor() {
@@ -216,6 +216,79 @@ class ApiClient {
     return this.request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  // Orders API
+  async getOrders(userId, params = {}) {
+    const queryParams = new URLSearchParams({ user_id: userId });
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    return this.request(`/api/orders?${queryParams.toString()}`);
+  }
+
+  // Wishlist API
+  async getWishlist(userId) {
+    return this.request(`/api/wishlist?user_id=${userId}`);
+  }
+
+  async addToWishlist(userId, bookId) {
+    return this.request('/api/wishlist', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, book_id: bookId }),
+    });
+  }
+
+  async removeFromWishlist(userId, bookId) {
+    return this.request(`/api/wishlist?user_id=${userId}&book_id=${bookId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Notifications API
+  async getNotifications(userId, filter = 'all') {
+    return this.request(`/api/notifications?user_id=${userId}&filter=${filter}`);
+  }
+
+  async markNotificationAsRead(notificationId) {
+    return this.request('/api/notifications', {
+      method: 'PUT',
+      body: JSON.stringify({ notification_id: notificationId }),
+    });
+  }
+
+  async markAllNotificationsAsRead(userId) {
+    return this.request('/api/notifications', {
+      method: 'PUT',
+      body: JSON.stringify({ user_id: userId, mark_all: true }),
+    });
+  }
+
+  // YouTube Channels API
+  async getYouTubeChannels(params = {}) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        queryParams.append(key, value.toString());
+      }
+    });
+    const query = queryParams.toString();
+    return this.request(`/api/youtube-channels${query ? `?${query}` : ''}`);
+  }
+
+  // Purchase API
+  async purchaseBook(userId, bookId, paymentMethod, transactionId) {
+    return this.request('/api/purchase', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        book_id: bookId,
+        payment_method: paymentMethod,
+        transaction_id: transactionId,
+      }),
     });
   }
 }

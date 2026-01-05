@@ -36,7 +36,7 @@ export default function DashboardPage() {
         startDate || undefined,
         endDate || undefined
       );
-      setStats(data);
+      setStats(data as typeof stats);
     } catch (err: any) {
       console.error('Error fetching dashboard stats:', err);
       // Show user-friendly error message

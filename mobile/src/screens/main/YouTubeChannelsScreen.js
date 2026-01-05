@@ -3,7 +3,7 @@
  * Display agriculture-related YouTube channels
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,22 +12,37 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
-import { youtubeChannels, categories, getChannelsByCategory } from '../../services/dummyData';
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
+import apiClient from '../../services/api';
+import { categories } from '../../services/dummyData';
 
 const YouTubeChannelsScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [channels, setChannels] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredChannels = useMemo(() => {
-    if (selectedCategory) {
-      return getChannelsByCategory(selectedCategory);
-    }
-    return youtubeChannels;
+  useEffect(() => {
+    const fetchChannels = async () => {
+      try {
+        setLoading(true);
+        const params = selectedCategory ? { category: selectedCategory } : {};
+        const response = await apiClient.getYouTubeChannels(params);
+        setChannels(response.channels || []);
+      } catch (error) {
+        console.error('Error fetching YouTube channels:', error);
+        setChannels([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchChannels();
   }, [selectedCategory]);
 
   const styles = StyleSheet.create({
@@ -177,16 +192,26 @@ const YouTubeChannelsScreen = ({ navigation }) => {
     },
   });
 
+  const handleChannelPress = async (channelUrl) => {
+    try {
+      const supported = await Linking.canOpenURL(channelUrl);
+      if (supported) {
+        await Linking.openURL(channelUrl);
+      } else {
+        console.error('Cannot open URL:', channelUrl);
+      }
+    } catch (error) {
+      console.error('Error opening channel:', error);
+    }
+  };
+
   const renderChannelItem = ({ item }) => (
     <TouchableOpacity
       style={styles.channelCard}
-      onPress={() => {
-        // Open YouTube channel or show channel details
-        console.log('Open channel:', item.channelUrl);
-      }}
+      onPress={() => handleChannelPress(item.channel_url)}
     >
       <Image
-        source={{ uri: item.thumbnail }}
+        source={{ uri: item.thumbnail_url || 'https://via.placeholder.com/120' }}
         style={styles.channelThumbnail}
         resizeMode="cover"
       />
@@ -198,17 +223,17 @@ const YouTubeChannelsScreen = ({ navigation }) => {
           )}
         </View>
         <Text style={styles.channelDescription} numberOfLines={2}>
-          {item.description}
+          {item.description || 'No description available'}
         </Text>
         <View style={styles.channelStats}>
           <Text style={styles.statText}>
-            {item.subscriberCount} subscribers
+            {item.subscriber_count || '0'} subscribers
           </Text>
           <Text style={styles.statText}>•</Text>
-          <Text style={styles.statText}>{item.videoCount} videos</Text>
+          <Text style={styles.statText}>{item.video_count || '0'} videos</Text>
         </View>
         <View style={styles.channelCategories}>
-          {item.categoryIds.map((catId) => {
+          {(item.category_ids || []).map((catId) => {
             const category = categories.find((cat) => cat.id === catId);
             return category ? (
               <View key={catId} style={styles.categoryTag}>
@@ -272,9 +297,13 @@ const YouTubeChannelsScreen = ({ navigation }) => {
       </ScrollView>
 
       {/* Channels List */}
-      {filteredChannels.length > 0 ? (
+      {loading ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={themeColors.primary.main} />
+        </View>
+      ) : channels.length > 0 ? (
         <FlatList
-          data={filteredChannels}
+          data={channels}
           renderItem={renderChannelItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}

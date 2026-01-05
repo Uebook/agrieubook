@@ -2,7 +2,7 @@
  * Wishlist Screen
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,19 +10,51 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { wishlistBooks } from '../../services/dummyData';
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const WishlistScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
-  const [wishlist, setWishlist] = useState(wishlistBooks);
+  const { userId } = useAuth();
+  const [wishlist, setWishlist] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const removeFromWishlist = (bookId) => {
-    setWishlist(wishlist.filter((book) => book.id !== bookId));
+  useEffect(() => {
+    const fetchWishlist = async () => {
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        const response = await apiClient.getWishlist(userId);
+        setWishlist(response.books || []);
+      } catch (error) {
+        console.error('Error fetching wishlist:', error);
+        setWishlist([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchWishlist();
+  }, [userId]);
+
+  const removeFromWishlist = async (bookId) => {
+    if (!userId) return;
+    try {
+      await apiClient.removeFromWishlist(userId, bookId);
+      setWishlist(wishlist.filter((book) => book.id !== bookId));
+    } catch (error) {
+      console.error('Error removing from wishlist:', error);
+      Alert.alert('Error', 'Failed to remove from wishlist');
+    }
   };
 
   const renderBookItem = ({ item }) => (
@@ -217,6 +249,17 @@ const WishlistScreen = ({ navigation }) => {
       fontWeight: '600',
     },
   });
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Header title="My Wishlist" navigation={navigation} />
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={themeColors.primary.main} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

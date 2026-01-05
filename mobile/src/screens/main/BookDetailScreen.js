@@ -15,11 +15,12 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { getBookById, wishlistBooks } from '../../services/dummyData';
+import { getBookById } from '../../services/dummyData';
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
+import { Alert } from 'react-native';
 
 const BookDetailScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
@@ -35,6 +36,40 @@ const BookDetailScreen = ({ route, navigation }) => {
   const isAuthor = userRole === 'author';
   const isMyBook = isAuthor && userId && book?.author_id === userId;
 
+  const handleWishlistToggle = async () => {
+    // Only allow wishlist for readers viewing other authors' books
+    if (!userId || !bookId || isMyBook || userRole !== 'reader') {
+      return;
+    }
+    try {
+      if (isWishlisted) {
+        await apiClient.removeFromWishlist(userId, bookId);
+        setIsWishlisted(false);
+      } else {
+        await apiClient.addToWishlist(userId, bookId);
+        setIsWishlisted(true);
+      }
+    } catch (error) {
+      console.error('Error toggling wishlist:', error);
+      Alert.alert('Error', 'Failed to update wishlist');
+    }
+  };
+
+  // Check if book is in wishlist - only for readers viewing other authors' books
+  useEffect(() => {
+    const checkWishlist = async () => {
+      if (!userId || !bookId || isMyBook || userRole !== 'reader') return;
+      try {
+        const response = await apiClient.getWishlist(userId);
+        const wishlistBookIds = (response.books || []).map((b) => b.id);
+        setIsWishlisted(wishlistBookIds.includes(bookId));
+      } catch (error) {
+        console.error('Error checking wishlist:', error);
+      }
+    };
+    checkWishlist();
+  }, [userId, bookId, isMyBook, userRole]);
+
   // Fetch book from API
   useEffect(() => {
     const fetchBook = async () => {
@@ -47,8 +82,6 @@ const BookDetailScreen = ({ route, navigation }) => {
         setLoading(true);
         const response = await apiClient.getBook(bookId);
         setBook(response.book);
-        // Check if book is in wishlist (TODO: implement wishlist API)
-        setIsWishlisted(wishlistBooks.some((b) => b.id === bookId));
       } catch (error) {
         console.error('Error fetching book:', error);
         // Fallback to dummy data
@@ -336,12 +369,15 @@ const BookDetailScreen = ({ route, navigation }) => {
             resizeMode="cover"
           />
         )}
-        <TouchableOpacity
-          style={styles.wishlistButton}
-          onPress={() => setIsWishlisted(!isWishlisted)}
-        >
-          <Text style={styles.wishlistIcon}>{isWishlisted ? '❤️' : '🤍'}</Text>
-        </TouchableOpacity>
+        {/* Wishlist button - only for readers viewing other authors' books */}
+        {!isMyBook && userRole === 'reader' && (
+          <TouchableOpacity
+            style={styles.wishlistButton}
+            onPress={handleWishlistToggle}
+          >
+            <Text style={styles.wishlistIcon}>{isWishlisted ? '❤️' : '🤍'}</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Book Info */}
@@ -349,27 +385,18 @@ const BookDetailScreen = ({ route, navigation }) => {
         <Text style={styles.title}>{book.title}</Text>
         <Text style={styles.author}>By {authorName}</Text>
 
-        {/* Rating */}
-        <View style={styles.ratingContainer}>
-          <Text style={styles.rating}>⭐ {book.rating || '0.0'}</Text>
-          <Text style={styles.reviews}>({book.reviews_count || 0} reviews)</Text>
-        </View>
-
-        {/* Price */}
-        <View style={styles.priceContainer}>
-          <Text style={styles.price}>
-            {book.is_free ? 'Free' : `₹${book.price || 0}`}
-          </Text>
-          {book.original_price && book.original_price > book.price && (
-            <Text style={styles.originalPrice}>₹{book.original_price}</Text>
-          )}
-          <TouchableOpacity
-            style={styles.reviewsButton}
-            onPress={() => navigation.navigate('Reviews', { bookId: book.id })}
-          >
-            <Text style={styles.reviewsButtonText}>View Reviews</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Rating and Reviews - HIDDEN for readers (requirement: "no review and rating") */}
+        {/* Price - Only for authors viewing their own book */}
+        {isMyBook && (
+          <View style={styles.priceContainer}>
+            <Text style={styles.price}>
+              {book.is_free ? 'Free' : `₹${book.price || 0}`}
+            </Text>
+            {book.original_price && book.original_price > book.price && (
+              <Text style={styles.originalPrice}>₹{book.original_price}</Text>
+            )}
+          </View>
+        )}
 
         {/* Book Details */}
         <View style={styles.detailsContainer}>
@@ -401,22 +428,25 @@ const BookDetailScreen = ({ route, navigation }) => {
           </Text>
         </View>
 
-        {/* Sample Reading */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Sample Reading</Text>
-          <Text style={styles.sampleText}>
-            {book.sampleText || 'Chapter 1: Introduction... [Sample content]'}
-          </Text>
-          <TouchableOpacity
-            style={styles.readSampleButton}
-            onPress={() => navigation.navigate('Reader', { bookId: book.id, sample: true })}
-          >
-            <Text style={styles.readSampleText}>Read Sample</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Sample Reading - Only for readers viewing other authors' books */}
+        {!isMyBook && userRole === 'reader' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sample Reading</Text>
+            <Text style={styles.sampleText}>
+              {book.sampleText || 'Chapter 1: Introduction... [Sample content]'}
+            </Text>
+            <TouchableOpacity
+              style={styles.readSampleButton}
+              onPress={() => navigation.navigate('Reader', { bookId: book.id, sample: true })}
+            >
+              <Text style={styles.readSampleText}>Read Sample</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Action Buttons */}
         {isMyBook ? (
+          // Author viewing their own book - Only Edit button
           <View style={styles.actionContainer}>
             <TouchableOpacity
               style={styles.editButton}
@@ -425,14 +455,27 @@ const BookDetailScreen = ({ route, navigation }) => {
               <Text style={styles.editButtonText}>✏️ Edit Book</Text>
             </TouchableOpacity>
           </View>
-        ) : (
+        ) : userRole === 'reader' ? (
+          // Reader viewing other authors' books - Only Read button
           <View style={styles.actionContainer}>
             <TouchableOpacity
-              style={styles.buyButton}
-              onPress={() => navigation.navigate('Payment', { bookId: book.id })}
+              style={styles.readButton}
+              onPress={() => navigation.navigate('Reader', { bookId: book.id })}
             >
-              <Text style={styles.buyButtonText}>Buy Now</Text>
+              <Text style={styles.readButtonText}>Read</Text>
             </TouchableOpacity>
+          </View>
+        ) : (
+          // Other cases (if any) - Buy and Read
+          <View style={styles.actionContainer}>
+            {!book.is_free && (
+              <TouchableOpacity
+                style={styles.buyButton}
+                onPress={() => navigation.navigate('Payment', { bookId: book.id })}
+              >
+                <Text style={styles.buyButtonText}>Buy Now</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.readButton}
               onPress={() => navigation.navigate('Reader', { bookId: book.id })}
