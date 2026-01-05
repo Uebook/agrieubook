@@ -360,7 +360,7 @@ const BookUploadScreen = ({ navigation }) => {
             type: pdfFile.type || 'application/pdf',
             name: pdfFile.name || 'book.pdf',
           };
-          const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs');
+          const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
           pdfUrl = pdfResult.url;
           currentStep++;
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
@@ -384,7 +384,7 @@ const BookUploadScreen = ({ navigation }) => {
             };
             
             imageUploadPromises.push(
-              apiClient.uploadFile(imageFile, 'books', 'covers')
+              apiClient.uploadFile(imageFile, 'books', 'covers', userId)
                 .then((result) => {
                   coverImageUrls.push(result.url);
                   currentStep++;
@@ -464,7 +464,7 @@ const BookUploadScreen = ({ navigation }) => {
               type: audioFile.type || 'audio/mpeg',
               name: audioFile.name || 'audio.mp3',
             };
-            const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio');
+            const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio', userId);
             audioUrl = audioResult.url;
             currentStep++;
             setUploadProgress(Math.round((currentStep / totalSteps) * 100));
@@ -488,7 +488,7 @@ const BookUploadScreen = ({ navigation }) => {
               };
               
               imageUploadPromises.push(
-                apiClient.uploadFile(imageFile, 'audio-books', 'covers')
+                apiClient.uploadFile(imageFile, 'audio-books', 'covers', userId)
                   .then((result) => {
                     coverImageUrls.push(result.url);
                     currentStep++;

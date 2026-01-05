@@ -165,7 +165,7 @@ class ApiClient {
   }
 
   // Upload API
-  async uploadFile(file, bucket, folder) {
+  async uploadFile(file, bucket, folder, authorId = null) {
     try {
       // Validate file object
       if (!file) {
@@ -198,6 +198,10 @@ class ApiClient {
       formData.append('bucket', bucket);
       if (folder) {
         formData.append('folder', folder);
+      }
+      // Append author_id if provided
+      if (authorId) {
+        formData.append('author_id', authorId);
       }
 
       const url = `${this.baseUrl}/api/upload`;

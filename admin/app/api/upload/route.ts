@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
       const file = formData.get('file');
       
       if (file) {
-        // This is a file upload request
-        return handleFileUpload(request);
+        // This is a file upload request - pass formData directly to avoid reading body twice
+        return handleFileUpload(formData);
       } else {
         // No file found, might be URL generation with formData (unlikely but handle it)
         return handleUrlGeneration(request);
@@ -35,15 +35,15 @@ export async function POST(request: NextRequest) {
 }
 
 // Handle file upload
-async function handleFileUpload(request: NextRequest) {
+async function handleFileUpload(formData: FormData) {
   try {
     const supabase = createServerClient();
-    const formData = await request.formData();
     const file = formData.get('file');
     const bucket = formData.get('bucket') as string;
     const folder = formData.get('folder') as string;
     const fileName = (formData.get('fileName') as string) || 'file';
     const fileType = (formData.get('fileType') as string) || 'application/octet-stream';
+    const authorId = formData.get('author_id') as string | null; // Get author_id from formData
     
     // Debug logging
     console.log('Upload request received:', {
@@ -184,12 +184,20 @@ async function handleFileUpload(request: NextRequest) {
       );
     }
     
-    // Generate unique file name
+    // Generate unique file name with author_id if provided
     const timestamp = Date.now();
     const fileExt = finalFileName.split('.').pop() || 'bin';
-    const uniqueFileName = folder
-      ? `${folder}/${timestamp}-${finalFileName}`
-      : `${timestamp}-${finalFileName}`;
+    // Include author_id in path if provided: folder/author_id/timestamp-filename
+    let uniqueFileName: string;
+    if (folder && authorId) {
+      uniqueFileName = `${folder}/${authorId}/${timestamp}-${finalFileName}`;
+    } else if (folder) {
+      uniqueFileName = `${folder}/${timestamp}-${finalFileName}`;
+    } else if (authorId) {
+      uniqueFileName = `${authorId}/${timestamp}-${finalFileName}`;
+    } else {
+      uniqueFileName = `${timestamp}-${finalFileName}`;
+    }
     
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage
