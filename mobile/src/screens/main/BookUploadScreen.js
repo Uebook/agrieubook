@@ -62,7 +62,10 @@ const BookUploadScreen = ({ navigation }) => {
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true);
+        console.log('📡 Fetching categories from API...');
         const response = await apiClient.getCategories();
+        console.log('📦 Categories API response:', response);
+        
         if (response?.categories && response.categories.length > 0) {
           // Map API categories to match expected format
           const mappedCategories = response.categories.map((cat) => ({
@@ -70,10 +73,15 @@ const BookUploadScreen = ({ navigation }) => {
             name: cat.name,
             icon: cat.icon || '📚',
           }));
+          console.log(`✅ Loaded ${mappedCategories.length} categories from API:`, mappedCategories);
           setCategories(mappedCategories);
+        } else {
+          console.warn('⚠️ No categories found in API response, using dummy data');
+          // Keep dummy categories as fallback
         }
       } catch (error) {
-        console.error('Error fetching categories:', error);
+        console.error('❌ Error fetching categories from API:', error);
+        console.log('🔄 Falling back to dummy categories');
         // Keep dummy categories as fallback
       } finally {
         setLoadingCategories(false);
@@ -1095,12 +1103,18 @@ const BookUploadScreen = ({ navigation }) => {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Category *</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.categoryScroll}
-            >
-              {categories.map((cat) => (
+            {loadingCategories ? (
+              <View style={styles.categoryLoadingContainer}>
+                <ActivityIndicator size="small" color={themeColors.primary.main} />
+                <Text style={styles.categoryLoadingText}>Loading categories...</Text>
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoryScroll}
+              >
+                {categories.map((cat) => (
                 <TouchableOpacity
                   key={cat.id}
                   style={[
