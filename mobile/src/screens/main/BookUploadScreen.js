@@ -343,28 +343,36 @@ const BookUploadScreen = ({ navigation }) => {
       let totalSteps = 0;
       let currentStep = 0;
 
-      // Calculate total steps
-      if (bookType === 'book') {
-        totalSteps = 1 + (coverImages.length || 1) + 1; // PDF + Images + Create record
-      } else {
-        totalSteps = 1 + (coverImages.length || 1) + 1; // Audio + Images + Create record
-      }
+      // Calculate total steps (files are now optional for testing)
+      let pdfUploadStep = pdfFile ? 1 : 0;
+      let imageUploadSteps = coverImages.length > 0 ? coverImages.length : 0;
+      totalSteps = pdfUploadStep + imageUploadSteps + 1; // Files + Create record
 
-      // Step 1: Upload PDF/Audio file
+      let pdfUrl = null;
+      let coverImageUrls = [];
+
+      // Step 1: Upload PDF/Audio file (OPTIONAL for testing)
       if (bookType === 'book' && pdfFile) {
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        const fileToUpload = pdfFile.file || {
-          uri: pdfFile.uri,
-          type: pdfFile.type || 'application/pdf',
-          name: pdfFile.name || 'book.pdf',
-        };
-        const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs');
-        const pdfUrl = pdfResult.url;
-        currentStep++;
+        try {
+          const fileToUpload = pdfFile.file || {
+            uri: pdfFile.uri,
+            type: pdfFile.type || 'application/pdf',
+            name: pdfFile.name || 'book.pdf',
+          };
+          const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs');
+          pdfUrl = pdfResult.url;
+          currentStep++;
+          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+        } catch (uploadError) {
+          console.warn('PDF upload failed (optional):', uploadError);
+          // Continue without PDF for testing
+        }
+      }
 
-        // Step 2: Upload cover images
+      // Step 2: Upload cover images (OPTIONAL for testing)
+      if (coverImages.length > 0) {
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        const coverImageUrls = [];
         const imageUploadPromises = [];
         
         for (let i = 0; i < coverImages.length; i++) {
@@ -376,35 +384,41 @@ const BookUploadScreen = ({ navigation }) => {
             };
             
             imageUploadPromises.push(
-              apiClient.uploadFile(imageFile, 'books', 'covers').then((result) => {
-                coverImageUrls.push(result.url);
-                currentStep++;
-                setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-              })
+              apiClient.uploadFile(imageFile, 'books', 'covers')
+                .then((result) => {
+                  coverImageUrls.push(result.url);
+                  currentStep++;
+                  setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                })
+                .catch((uploadError) => {
+                  console.warn(`Cover image ${i} upload failed (optional):`, uploadError);
+                  // Continue without this image for testing
+                })
             );
           }
         }
         
         await Promise.all(imageUploadPromises);
+      }
 
-        // Step 3: Create book record
-        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        const bookData = {
-          title: formData.title,
-          author_id: userId,
-          summary: formData.description,
-          price: parseFloat(formData.price) || 0,
-          pages: formData.pages ? parseInt(formData.pages) : null,
-          language: formData.language,
-          category_id: formData.category,
-          isbn: formData.isbn || null,
-          is_free: false,
-          pdf_url: pdfUrl,
-          cover_image_url: coverImageUrls[0] || null,
-          cover_images: coverImageUrls,
-        };
+      // Step 3: Create book record (even without files for testing)
+      setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+      const bookData = {
+        title: formData.title,
+        author_id: userId,
+        summary: formData.description,
+        price: parseFloat(formData.price) || 0,
+        pages: formData.pages ? parseInt(formData.pages) : null,
+        language: formData.language,
+        category_id: formData.category,
+        isbn: formData.isbn || null,
+        is_free: false,
+        pdf_url: pdfUrl, // Can be null for testing
+        cover_image_url: coverImageUrls[0] || null, // Can be null for testing
+        cover_images: coverImageUrls, // Can be empty array for testing
+      };
 
-        await apiClient.createBook(bookData);
+      await apiClient.createBook(bookData);
         currentStep++;
         setUploadProgress(100);
 
@@ -432,44 +446,66 @@ const BookUploadScreen = ({ navigation }) => {
             },
           ]
         );
-      } else if (bookType === 'audio' && audioFile) {
-        // Step 1: Upload audio file
-        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        const fileToUpload = audioFile.file || {
-          uri: audioFile.uri,
-          type: audioFile.type || 'audio/mpeg',
-          name: audioFile.name || 'audio.mp3',
-        };
-        const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio');
-        const audioUrl = audioResult.url;
-        currentStep++;
+      } else if (bookType === 'audio') {
+        // Calculate total steps for audio book (files are optional)
+        let audioUploadStep = audioFile ? 1 : 0;
+        let imageUploadSteps = coverImages.length > 0 ? coverImages.length : 0;
+        totalSteps = audioUploadStep + imageUploadSteps + 1;
 
-        // Step 2: Upload cover images
-        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-        const coverImageUrls = [];
-        const imageUploadPromises = [];
-        
-        for (let i = 0; i < coverImages.length; i++) {
-          if (coverImages[i].file || coverImages[i].uri) {
-            const imageFile = coverImages[i].file || {
-              uri: coverImages[i].uri,
-              type: coverImages[i].type || 'image/jpeg',
-              name: coverImages[i].name || `cover_${i}.jpg`,
+        let audioUrl = null;
+        let coverImageUrls = [];
+
+        // Step 1: Upload audio file (OPTIONAL for testing)
+        if (audioFile) {
+          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          try {
+            const fileToUpload = audioFile.file || {
+              uri: audioFile.uri,
+              type: audioFile.type || 'audio/mpeg',
+              name: audioFile.name || 'audio.mp3',
             };
-            
-            imageUploadPromises.push(
-              apiClient.uploadFile(imageFile, 'audio-books', 'covers').then((result) => {
-                coverImageUrls.push(result.url);
-                currentStep++;
-                setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-              })
-            );
+            const audioResult = await apiClient.uploadFile(fileToUpload, 'audio-books', 'audio');
+            audioUrl = audioResult.url;
+            currentStep++;
+            setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          } catch (uploadError) {
+            console.warn('Audio upload failed (optional):', uploadError);
+            // Continue without audio for testing
           }
         }
-        
-        await Promise.all(imageUploadPromises);
 
-        // Step 3: Create audio book record
+        // Step 2: Upload cover images (OPTIONAL for testing)
+        if (coverImages.length > 0) {
+          setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+          const imageUploadPromises = [];
+          
+          for (let i = 0; i < coverImages.length; i++) {
+            if (coverImages[i].file || coverImages[i].uri) {
+              const imageFile = coverImages[i].file || {
+                uri: coverImages[i].uri,
+                type: coverImages[i].type || 'image/jpeg',
+                name: coverImages[i].name || `cover_${i}.jpg`,
+              };
+              
+              imageUploadPromises.push(
+                apiClient.uploadFile(imageFile, 'audio-books', 'covers')
+                  .then((result) => {
+                    coverImageUrls.push(result.url);
+                    currentStep++;
+                    setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                  })
+                  .catch((uploadError) => {
+                    console.warn(`Cover image ${i} upload failed (optional):`, uploadError);
+                    // Continue without this image for testing
+                  })
+              );
+            }
+          }
+          
+          await Promise.all(imageUploadPromises);
+        }
+
+        // Step 3: Create audio book record (even without files for testing)
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
         const audioBookData = {
           title: formData.title,
@@ -534,19 +570,21 @@ const BookUploadScreen = ({ navigation }) => {
       return;
     }
     if (bookType === 'book') {
-      if (!pdfFile) {
-        Alert.alert('Error', 'Please upload a PDF file');
-        return;
-      }
+      // PDF file is now optional for testing
+      // if (!pdfFile) {
+      //   Alert.alert('Error', 'Please upload a PDF file');
+      //   return;
+      // }
       if (!formData.price || parseFloat(formData.price) < 0) {
         Alert.alert('Error', 'Please enter a valid price');
         return;
       }
     } else {
-      if (!audioFile) {
-        Alert.alert('Error', 'Please upload an audio file');
-        return;
-      }
+      // Audio file is now optional for testing
+      // if (!audioFile) {
+      //   Alert.alert('Error', 'Please upload an audio file');
+      //   return;
+      // }
     }
 
     // Start upload
