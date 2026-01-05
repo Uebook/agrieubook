@@ -301,8 +301,13 @@ const BookUploadScreen = ({ navigation }) => {
             currentStep++;
             setUploadProgress(Math.round((currentStep / totalSteps) * 100));
           } catch (uploadError) {
-            console.warn('PDF upload failed (optional):', uploadError);
-            // Continue without PDF for testing
+            console.error('PDF upload failed:', uploadError);
+            // Show error but allow continuing without PDF for testing
+            Alert.alert(
+              'Upload Warning',
+              `PDF upload failed: ${uploadError.message || 'Unknown error'}\n\nContinuing without PDF file...`,
+              [{ text: 'OK' }]
+            );
           }
         }
 
@@ -325,10 +330,11 @@ const BookUploadScreen = ({ navigation }) => {
                     coverImageUrls.push(result.url);
                     currentStep++;
                     setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                    console.log(`Cover image ${i + 1} uploaded successfully:`, result.url);
                   })
                   .catch((uploadError) => {
-                    console.warn(`Cover image ${i} upload failed (optional):`, uploadError);
-                    // Continue without this image for testing
+                    console.error(`Cover image ${i + 1} upload failed:`, uploadError);
+                    // Continue without this image - error already logged
                   })
               );
             }
@@ -433,10 +439,11 @@ const BookUploadScreen = ({ navigation }) => {
                     coverImageUrls.push(result.url);
                     currentStep++;
                     setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                    console.log(`Cover image ${i + 1} uploaded successfully:`, result.url);
                   })
                   .catch((uploadError) => {
-                    console.warn(`Cover image ${i} upload failed (optional):`, uploadError);
-                    // Continue without this image for testing
+                    console.error(`Cover image ${i + 1} upload failed:`, uploadError);
+                    // Continue without this image - error already logged
                   })
               );
             }
@@ -460,7 +467,9 @@ const BookUploadScreen = ({ navigation }) => {
           published_date: new Date().toISOString(), // Set published date to current date
         };
 
-        await apiClient.createAudioBook(audioBookData);
+        // Create audio book record via API
+        const createdAudioBook = await apiClient.createAudioBook(audioBookData);
+        console.log('Audio book created successfully:', createdAudioBook);
         currentStep++;
         setUploadProgress(100);
 
