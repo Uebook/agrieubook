@@ -208,7 +208,10 @@ async function handleUrlGeneration(request: NextRequest) {
     if (uploadError) {
       console.error('Error creating upload URL:', uploadError);
       return NextResponse.json(
-        { error: 'Failed to create upload URL' },
+        { 
+          error: 'Failed to create upload URL',
+          details: uploadError.message || 'Unknown error'
+        },
         { status: 500 }
       );
     }
@@ -222,7 +225,11 @@ async function handleUrlGeneration(request: NextRequest) {
   } catch (error: any) {
     console.error('Error in URL generation:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error.message || 'Unknown error',
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
