@@ -97,9 +97,9 @@ async function handleFileUpload(formData: FormData) {
     }
     
     // Read file as Buffer (works for both File and React Native FormData)
-    let fileBuffer: Buffer;
-    let finalFileName: string;
-    let contentType: string;
+    let fileBuffer: Buffer | undefined;
+    let finalFileName: string = fileName; // Initialize with fileName from formData
+    let contentType: string = fileType; // Initialize with fileType from formData
     
     try {
       const fileObj = file as any;
