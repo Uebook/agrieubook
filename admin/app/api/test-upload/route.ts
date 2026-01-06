@@ -14,7 +14,8 @@ export async function POST(request: NextRequest) {
     const supabase = createServerClient();
     const formData = await request.formData();
     const file = formData.get('file');
-    const fileType = formData.get('fileType') || 'application/octet-stream';
+    const fileTypeParam = formData.get('fileType');
+    const fileType = (typeof fileTypeParam === 'string' ? fileTypeParam : null) || 'application/octet-stream';
     
     console.log('📥 Test upload request:', {
       hasFile: !!file,
