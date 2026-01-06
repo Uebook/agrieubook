@@ -227,21 +227,22 @@ class ApiClient {
 
       console.log('Upload response:', { status: response.status, statusText: response.statusText });
 
-      // Get response text first to handle both success and error cases
+      // Read response as text first (can only read once)
       const responseText = await response.text();
-      console.log('Upload response text (raw):', responseText.substring(0, 500)); // Log first 500 chars
+      console.log('Upload response text (raw, first 500 chars):', responseText.substring(0, 500));
 
       if (!response.ok) {
         console.error('Upload failed - HTTP status:', response.status);
         let error;
         try {
           error = JSON.parse(responseText);
-          console.error('Upload failed - parsed error:', error);
+          console.error('Upload failed - parsed error:', JSON.stringify(error, null, 2));
         } catch (parseError) {
-          console.error('Upload failed - could not parse error:', responseText);
+          console.error('Upload failed - could not parse error as JSON:', responseText);
           error = { error: responseText || 'Upload failed' };
         }
-        throw new Error(error.error || error.message || `Upload failed with status ${response.status}`);
+        const errorMessage = error.error || error.message || `Upload failed with status ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       // Parse successful response
@@ -251,7 +252,7 @@ class ApiClient {
         console.log('Upload success response (parsed):', JSON.stringify(result, null, 2));
       } catch (parseError) {
         console.error('Failed to parse upload response as JSON:', responseText);
-        throw new Error('Invalid JSON response from upload API');
+        throw new Error('Invalid JSON response from upload API: ' + parseError.message);
       }
       
       // Ensure we have the expected structure
@@ -272,7 +273,8 @@ class ApiClient {
         console.log('✅ Found URL in result.publicUrl:', result.publicUrl);
         return { ...result, url: result.publicUrl };
       } else {
-        console.error('❌ Unexpected upload response structure - no URL found:', result);
+        console.error('❌ Unexpected upload response structure - no URL found');
+        console.error('Response object:', result);
         console.error('Response keys:', Object.keys(result));
         throw new Error('Upload response missing URL field. Response: ' + JSON.stringify(result));
       }
