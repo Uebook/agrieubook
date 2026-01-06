@@ -293,9 +293,10 @@ async function handleFileUpload(formData: FormData) {
     }
     
     // Upload to Supabase Storage
+    // TypeScript assertion: fileBuffer is guaranteed to be defined at this point
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(uniqueFileName, fileBuffer, {
+      .upload(uniqueFileName, fileBuffer as Buffer, {
         contentType: contentType,
         cacheControl: '3600',
         upsert: false,
