@@ -46,8 +46,10 @@ async function testUpload() {
   fs.writeFileSync(imagePath, jpegHeader);
   console.log('✅ Created test image:', imagePath);
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://admin-orcin-omega.vercel.app';
   const testAuthorId = 'test-author-123';
+  
+  console.log('🌐 Testing against:', baseUrl);
 
   // Test 1: Upload PDF
   console.log('\n📄 Test 1: Uploading PDF...');
@@ -85,8 +87,47 @@ async function testUpload() {
     console.error('❌ PDF Upload Error:', error.message);
   }
 
-  // Test 2: Upload Image
-  console.log('\n🖼️  Test 2: Uploading Image...');
+  // Test 2: Upload Image using test-upload API
+  console.log('\n🖼️  Test 2: Uploading Image via /api/test-upload...');
+  try {
+    const imageFormData = new FormData();
+    imageFormData.append('file', fs.createReadStream(imagePath), {
+      filename: 'test.jpg',
+      contentType: 'image/jpeg',
+    });
+    imageFormData.append('fileType', 'image/jpeg');
+
+    const imageResponse = await fetch(`${baseUrl}/api/test-upload`, {
+      method: 'POST',
+      body: imageFormData,
+      headers: imageFormData.getHeaders(),
+    });
+
+    const imageResult = await imageResponse.text();
+    console.log('Image Upload Status:', imageResponse.status);
+    console.log('Image Upload Response:', imageResult.substring(0, 500));
+    
+    if (imageResponse.ok) {
+      const imageJson = JSON.parse(imageResult);
+      console.log('✅ Image Upload Success!');
+      console.log('   URL:', imageJson.url);
+      console.log('   Path:', imageJson.upload?.path);
+      console.log('   Size:', imageJson.file?.size, 'bytes');
+    } else {
+      console.log('❌ Image Upload Failed');
+      try {
+        const errorJson = JSON.parse(imageResult);
+        console.log('   Error:', errorJson.error);
+      } catch (e) {
+        console.log('   Raw error:', imageResult);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Image Upload Error:', error.message);
+  }
+  
+  // Test 2b: Upload Image using original upload API
+  console.log('\n🖼️  Test 2b: Uploading Image via /api/upload (original)...');
   try {
     const imageFormData = new FormData();
     imageFormData.append('file', fs.createReadStream(imagePath), {
@@ -116,6 +157,12 @@ async function testUpload() {
       console.log('   Path:', imageJson.path);
     } else {
       console.log('❌ Image Upload Failed');
+      try {
+        const errorJson = JSON.parse(imageResult);
+        console.log('   Error:', errorJson.error);
+      } catch (e) {
+        console.log('   Raw error:', imageResult);
+      }
     }
   } catch (error) {
     console.error('❌ Image Upload Error:', error.message);
