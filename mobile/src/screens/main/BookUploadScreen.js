@@ -494,21 +494,37 @@ const BookUploadScreen = ({ navigation }) => {
               imageUploadPromises.push(
                 apiClient.uploadFile(imageFile, 'books', 'covers', userId)
                   .then((result) => {
-                    // Handle response structure - API returns { success: true, url: ..., path: ... }
-                    console.log(`Cover image ${i + 1} upload result:`, result);
-                    const imageUrl = result?.url || result?.data?.url || result?.publicUrl;
-                    if (imageUrl) {
-                      coverImageUrls.push(imageUrl);
-                      currentStep++;
-                      setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-                      console.log(`Cover image ${i + 1} uploaded successfully:`, imageUrl);
-                    } else {
-                      console.error(`Cover image ${i + 1} response missing URL:`, result);
-                      throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(result));
+                    try {
+                      // Handle response structure - API returns { success: true, url: ..., path: ... }
+                      console.log(`Cover image ${i + 1} upload result:`, result);
+                      
+                      if (!result || typeof result !== 'object') {
+                        throw new Error('Upload response is invalid: ' + typeof result);
+                      }
+                      
+                      const imageUrl = result.url || (result.data && result.data.url) || result.publicUrl;
+                      if (imageUrl) {
+                        coverImageUrls.push(imageUrl);
+                        currentStep++;
+                        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                        console.log(`Cover image ${i + 1} uploaded successfully:`, imageUrl);
+                      } else {
+                        console.error(`Cover image ${i + 1} response missing URL:`, result);
+                        throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(result));
+                      }
+                    } catch (err) {
+                      console.error(`Cover image ${i + 1} processing error:`, err);
+                      throw err;
                     }
                   })
                   .catch((uploadError) => {
                     console.error(`Cover image ${i + 1} upload failed:`, uploadError);
+                    console.error(`Cover image ${i + 1} error details:`, {
+                      message: uploadError?.message || 'Unknown error',
+                      stack: uploadError?.stack,
+                      name: uploadError?.name,
+                      error: uploadError,
+                    });
                     // Continue without this image - error already logged
                   })
               );
@@ -621,21 +637,37 @@ const BookUploadScreen = ({ navigation }) => {
               imageUploadPromises.push(
                 apiClient.uploadFile(imageFile, 'audio-books', 'covers', userId)
                   .then((result) => {
-                    // Handle response structure - API returns { success: true, url: ..., path: ... }
-                    console.log(`Cover image ${i + 1} upload result:`, result);
-                    const imageUrl = result?.url || result?.data?.url || result?.publicUrl;
-                    if (imageUrl) {
-                      coverImageUrls.push(imageUrl);
-                      currentStep++;
-                      setUploadProgress(Math.round((currentStep / totalSteps) * 100));
-                      console.log(`Cover image ${i + 1} uploaded successfully:`, imageUrl);
-                    } else {
-                      console.error(`Cover image ${i + 1} response missing URL:`, result);
-                      throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(result));
+                    try {
+                      // Handle response structure - API returns { success: true, url: ..., path: ... }
+                      console.log(`Cover image ${i + 1} upload result:`, result);
+                      
+                      if (!result || typeof result !== 'object') {
+                        throw new Error('Upload response is invalid: ' + typeof result);
+                      }
+                      
+                      const imageUrl = result.url || (result.data && result.data.url) || result.publicUrl;
+                      if (imageUrl) {
+                        coverImageUrls.push(imageUrl);
+                        currentStep++;
+                        setUploadProgress(Math.round((currentStep / totalSteps) * 100));
+                        console.log(`Cover image ${i + 1} uploaded successfully:`, imageUrl);
+                      } else {
+                        console.error(`Cover image ${i + 1} response missing URL:`, result);
+                        throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(result));
+                      }
+                    } catch (err) {
+                      console.error(`Cover image ${i + 1} processing error:`, err);
+                      throw err;
                     }
                   })
                   .catch((uploadError) => {
                     console.error(`Cover image ${i + 1} upload failed:`, uploadError);
+                    console.error(`Cover image ${i + 1} error details:`, {
+                      message: uploadError?.message || 'Unknown error',
+                      stack: uploadError?.stack,
+                      name: uploadError?.name,
+                      error: uploadError,
+                    });
                     // Continue without this image - error already logged
                   })
               );
