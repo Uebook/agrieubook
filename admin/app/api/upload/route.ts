@@ -48,7 +48,17 @@ export async function POST(request: NextRequest) {
       if (file) {
         // This is a file upload request - pass formData directly to avoid reading body twice
         const result = await handleFileUpload(formData);
-        // Add CORS headers to response
+        
+        // If handleFileUpload returned an error response, return it directly
+        if (result instanceof NextResponse) {
+          // Add CORS headers to error response
+          Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+            result.headers.set(key, value);
+          });
+          return result;
+        }
+        
+        // Add CORS headers to success response
         const response = NextResponse.json(result);
         Object.entries(getCorsHeaders()).forEach(([key, value]) => {
           response.headers.set(key, value);
@@ -340,8 +350,15 @@ async function handleFileUpload(formData: FormData) {
       uniqueFileName = `${timestamp}-${finalFileName}`;
     }
     
+    // Ensure fileBuffer is defined before upload
+    if (!fileBuffer) {
+      return NextResponse.json(
+        { error: 'File buffer is undefined' },
+        { status: 400 }
+      );
+    }
+    
     // Upload to Supabase Storage
-    // TypeScript assertion: fileBuffer is guaranteed to be defined at this point
     const { data, error } = await supabase.storage
       .from(bucket)
       .upload(uniqueFileName, fileBuffer as Buffer, {
@@ -363,11 +380,13 @@ async function handleFileUpload(formData: FormData) {
       .from(bucket)
       .getPublicUrl(uniqueFileName);
     
-    return NextResponse.json({
+    // Return in the exact format expected by the mobile app
+    // { success: true, path: ..., url: ... }
+    return {
       success: true,
       path: uniqueFileName,
       url: urlData.publicUrl,
-    });
+    };
   } catch (error: any) {
     console.error('Error in file upload:', error);
     return NextResponse.json(
