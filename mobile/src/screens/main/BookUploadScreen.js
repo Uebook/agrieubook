@@ -549,19 +549,28 @@ const BookUploadScreen = ({ navigation }) => {
                     if (uploadError) {
                       if (typeof uploadError === 'string') {
                         errorMessage = uploadError;
-                      } else if (uploadError.message) {
+                      } else if (uploadError && typeof uploadError === 'object' && uploadError.message) {
                         errorMessage = uploadError.message;
-                      } else if (uploadError.error) {
+                      } else if (uploadError && typeof uploadError === 'object' && uploadError.error) {
                         errorMessage = typeof uploadError.error === 'string' ? uploadError.error : 'Upload failed';
                       }
                     }
                     
+                    // Check for network errors more thoroughly
+                    const isNetworkError = 
+                      errorMessage?.includes('Network request failed') ||
+                      errorMessage?.includes('Failed to fetch') ||
+                      errorMessage?.includes('Network error') ||
+                      (uploadError?.name === 'TypeError' && errorMessage?.includes('Network')) ||
+                      (uploadError?.name === 'TypeError' && errorMessage?.includes('fetch'));
+                    
                     console.error(`Cover image ${i + 1} error details:`, {
                       message: errorMessage,
-                      stack: uploadError?.stack || 'No stack trace',
-                      name: uploadError?.name || 'Unknown',
+                      stack: (uploadError && typeof uploadError === 'object' && uploadError.stack) ? uploadError.stack : 'No stack trace',
+                      name: (uploadError && typeof uploadError === 'object' && uploadError.name) ? uploadError.name : 'Unknown',
                       errorType: typeof uploadError,
-                      isNetworkError: errorMessage?.includes('Network') || errorMessage?.includes('fetch'),
+                      isNetworkError: isNetworkError,
+                      originalError: uploadError,
                     });
                     // Continue without this image - error already logged
                   })
@@ -720,19 +729,28 @@ const BookUploadScreen = ({ navigation }) => {
                     if (uploadError) {
                       if (typeof uploadError === 'string') {
                         errorMessage = uploadError;
-                      } else if (uploadError.message) {
+                      } else if (uploadError && typeof uploadError === 'object' && uploadError.message) {
                         errorMessage = uploadError.message;
-                      } else if (uploadError.error) {
+                      } else if (uploadError && typeof uploadError === 'object' && uploadError.error) {
                         errorMessage = typeof uploadError.error === 'string' ? uploadError.error : 'Upload failed';
                       }
                     }
                     
+                    // Check for network errors more thoroughly
+                    const isNetworkError = 
+                      errorMessage?.includes('Network request failed') ||
+                      errorMessage?.includes('Failed to fetch') ||
+                      errorMessage?.includes('Network error') ||
+                      (uploadError?.name === 'TypeError' && errorMessage?.includes('Network')) ||
+                      (uploadError?.name === 'TypeError' && errorMessage?.includes('fetch'));
+                    
                     console.error(`Cover image ${i + 1} error details:`, {
                       message: errorMessage,
-                      stack: uploadError?.stack || 'No stack trace',
-                      name: uploadError?.name || 'Unknown',
+                      stack: (uploadError && typeof uploadError === 'object' && uploadError.stack) ? uploadError.stack : 'No stack trace',
+                      name: (uploadError && typeof uploadError === 'object' && uploadError.name) ? uploadError.name : 'Unknown',
                       errorType: typeof uploadError,
-                      isNetworkError: errorMessage?.includes('Network') || errorMessage?.includes('fetch'),
+                      isNetworkError: isNetworkError,
+                      originalError: uploadError,
                     });
                     // Continue without this image - error already logged
                   })

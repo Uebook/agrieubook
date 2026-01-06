@@ -287,19 +287,36 @@ class ApiClient {
       }
     } catch (error) {
       console.error('Upload error:', error);
+      
+      // Extract error message safely
+      const errorMessage = error?.message || error?.error || 'Unknown error';
+      const errorName = error?.name || 'Unknown';
+      
+      // Check for network errors
+      const isNetworkError = 
+        errorMessage.includes('Network request failed') ||
+        errorMessage.includes('Failed to fetch') ||
+        errorMessage.includes('Network error') ||
+        (errorName === 'TypeError' && errorMessage.includes('Network')) ||
+        (errorName === 'TypeError' && errorMessage.includes('fetch'));
+      
       console.error('Upload error details:', {
-        message: error.message,
+        message: errorMessage,
+        name: errorName,
         url: url,
         baseUrl: this.baseUrl,
         fileName,
         fileType,
         bucket,
         folder,
+        isNetworkError: isNetworkError,
       });
-      // Provide more helpful error messages
-      if (error.message && error.message.includes('Network request failed')) {
-        throw new Error(`Network error: Cannot connect to ${url}. Please check your internet connection and ensure the API server is accessible.`);
+      
+      // If it's a network error, provide a more helpful message
+      if (isNetworkError) {
+        throw new Error(`Network error: Unable to reach upload server at ${url}. Please check your internet connection and try again.`);
       }
+      
       throw error;
     }
   }
