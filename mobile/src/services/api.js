@@ -261,21 +261,28 @@ class ApiClient {
         throw new Error('Upload response is invalid: ' + typeof result);
       }
       
+      // Check for error in response first
+      if (result.error) {
+        console.error('❌ Upload API returned error:', result.error);
+        throw new Error(result.error || 'Upload failed');
+      }
+
       // The API returns { success: true, url: ..., path: ... }
       // But check all possible formats
-      if (result.url) {
+      if (result.url && typeof result.url === 'string') {
         console.log('✅ Found URL in result.url:', result.url);
         return result;
-      } else if (result.data && result.data.url) {
+      } else if (result.data && result.data && result.data.url && typeof result.data.url === 'string') {
         console.log('✅ Found URL in result.data.url:', result.data.url);
         return { ...result, url: result.data.url };
-      } else if (result.publicUrl) {
+      } else if (result.publicUrl && typeof result.publicUrl === 'string') {
         console.log('✅ Found URL in result.publicUrl:', result.publicUrl);
         return { ...result, url: result.publicUrl };
       } else {
         console.error('❌ Unexpected upload response structure - no URL found');
-        console.error('Response object:', result);
+        console.error('Response object:', JSON.stringify(result, null, 2));
         console.error('Response keys:', Object.keys(result));
+        console.error('Response type:', typeof result);
         throw new Error('Upload response missing URL field. Response: ' + JSON.stringify(result));
       }
     } catch (error) {
