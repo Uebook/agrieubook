@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
           id,
           title,
           cover_image_url,
-          author:authors(id, name),
+          author_id,
           price,
           is_free
         ),
@@ -36,8 +36,7 @@ export async function GET(request: NextRequest) {
           id,
           title,
           cover_url,
-          author:authors(id, name),
-          price,
+          author_id,
           is_free
         )
       `)
@@ -65,10 +64,33 @@ export async function GET(request: NextRequest) {
       console.error('Error counting purchases:', countError);
     }
 
+    // Fetch authors separately for all items
+    const authorIds = new Set<string>();
+    payments?.forEach((payment: any) => {
+      if (payment.book?.author_id) authorIds.add(payment.book.author_id);
+      if (payment.audio_book?.author_id) authorIds.add(payment.audio_book.author_id);
+    });
+
+    let authorsMap: Record<string, any> = {};
+    if (authorIds.size > 0) {
+      const { data: authors, error: authorsError } = await supabase
+        .from('authors')
+        .select('id, name')
+        .in('id', Array.from(authorIds));
+
+      if (!authorsError && authors) {
+        authors.forEach((author: any) => {
+          authorsMap[author.id] = author;
+        });
+      }
+    }
+
     // Format response - handle both books and audio books
-    const orders = payments?.map((payment) => {
+    const orders = payments?.map((payment: any) => {
       const item = payment.book || payment.audio_book;
       const itemType = payment.book ? 'book' : 'audio_book';
+      const authorId = item?.author_id;
+      const author = authorId ? authorsMap[authorId] : null;
       
       return {
         id: payment.id,
@@ -85,11 +107,11 @@ export async function GET(request: NextRequest) {
                 cover: item.cover_image_url || item.cover_url,
                 cover_image_url: item.cover_image_url || item.cover_url,
                 author: {
-                  id: item.author?.id,
-                  name: item.author?.name || 'Unknown',
+                  id: author?.id || authorId,
+                  name: author?.name || 'Unknown',
                 },
-                price: parseFloat(item.price?.toString() || '0'),
-                isFree: item.is_free || parseFloat(item.price?.toString() || '0') === 0,
+                price: item.price ? parseFloat(item.price?.toString() || '0') : 0,
+                isFree: item.is_free || (item.price ? parseFloat(item.price?.toString() || '0') === 0 : true),
                 type: itemType,
               },
             ]
