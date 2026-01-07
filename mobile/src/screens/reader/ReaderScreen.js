@@ -16,11 +16,16 @@ import {
   TextInput,
   FlatList,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { useSettings } from '../../context/SettingsContext';
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../services/api';
 
 const ReaderScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
+  const { userId, userRole } = useAuth();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { bookId, sample } = route.params || {};
@@ -34,6 +39,10 @@ const ReaderScreen = ({ route, navigation }) => {
   const [bookmarks, setBookmarks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [loadingPdf, setLoadingPdf] = useState(true);
+  const [isPurchased, setIsPurchased] = useState(false);
+  const [book, setBook] = useState(null);
 
   // Audio Reading Mode State
   const [isAudioMode, setIsAudioMode] = useState(false);
@@ -43,7 +52,7 @@ const ReaderScreen = ({ route, navigation }) => {
   const [totalDuration, setTotalDuration] = useState(0);
   const audioIntervalRef = useRef(null);
 
-  // Sample book content for search
+  // Sample book content for search (only used if sample mode or not purchased)
   const bookContent = `Chapter 1: Introduction to Modern Agriculture
 
 Modern agriculture has evolved significantly over the past few decades. With the advent of new technologies and sustainable practices, farmers can now achieve higher yields while maintaining environmental balance.
@@ -57,6 +66,81 @@ The key principles of modern agriculture include:
 - Organic farming methods
 
 These practices have revolutionized the agricultural industry, making it more efficient and environmentally friendly.`;
+
+  // Check if book is purchased and fetch PDF
+  useEffect(() => {
+    const fetchBookAndCheckPurchase = async () => {
+      if (!bookId) {
+        setLoadingPdf(false);
+        return;
+      }
+
+      try {
+        setLoadingPdf(true);
+        
+        // Fetch book details
+        const bookResponse = await apiClient.getBook(bookId);
+        const bookData = bookResponse.book;
+        setBook(bookData);
+
+        // If it's a sample, don't fetch PDF
+        if (sample) {
+          setLoadingPdf(false);
+          return;
+        }
+
+        // Check if book is free
+        if (bookData.is_free) {
+          // Free book - fetch PDF
+          const downloadResponse = await apiClient.getBookDownloadUrl(bookId);
+          if (downloadResponse.downloadUrl) {
+            setPdfUrl(downloadResponse.downloadUrl);
+            setIsPurchased(true);
+          }
+          setLoadingPdf(false);
+          return;
+        }
+
+        // Check if user is logged in
+        if (!userId || userRole !== 'reader') {
+          setLoadingPdf(false);
+          return;
+        }
+
+        // Check if book is purchased
+        const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
+        const orders = ordersResponse.orders || [];
+        
+        const purchased = orders.some((order) => {
+          if (order.books && Array.isArray(order.books)) {
+            return order.books.some((b) => b.id === bookId);
+          }
+          return false;
+        });
+
+        if (purchased) {
+          // Book is purchased - fetch actual PDF
+          const downloadResponse = await apiClient.getBookDownloadUrl(bookId);
+          if (downloadResponse.downloadUrl) {
+            setPdfUrl(downloadResponse.downloadUrl);
+            setIsPurchased(true);
+          } else {
+            Alert.alert('Error', 'Failed to load PDF. Please try again.');
+          }
+        } else {
+          // Book not purchased - show sample
+          setIsPurchased(false);
+        }
+      } catch (error) {
+        console.error('Error fetching book/PDF:', error);
+        Alert.alert('Error', 'Failed to load book. Please try again.');
+      } finally {
+        setLoadingPdf(false);
+      }
+    };
+
+    fetchBookAndCheckPurchase();
+  }, [bookId, sample, userId, userRole]);
 
   const handleBookmark = () => {
     const currentPage = {
@@ -559,21 +643,91 @@ These practices have revolutionized the agricultural industry, making it more ef
       fontSize: 12 * fontSizeMultiplier,
       color: themeColors.text.secondary,
     },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 40,
+    },
+    sampleNotice: {
+      padding: 16,
+      marginBottom: 20,
+      backgroundColor: themeColors.background.secondary,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: themeColors.primary.main,
+    },
+    sampleNoticeText: {
+      fontSize: 18 * fontSizeMultiplier,
+      fontWeight: 'bold',
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    sampleNoticeSubtext: {
+      fontSize: 14 * fontSizeMultiplier,
+      textAlign: 'center',
+      opacity: 0.8,
+    },
   });
+
+  // Show loading while fetching PDF
+  if (loadingPdf) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: currentTheme.background, justifyContent: 'center', alignItems: 'center' }]}
+      >
+        <ActivityIndicator size="large" color={themeColors.primary.main} />
+        <Text style={{ marginTop: 16, color: currentTheme.text }}>
+          Loading book...
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: currentTheme.background }]}
     >
-      {/* Reader Content */}
-      <ScrollView
-        style={styles.readerContent}
-        contentContainerStyle={styles.readerContentContainer}
-      >
-        <Text style={[styles.readerText, { color: currentTheme.text, fontSize }]}>
-          {bookContent}
-        </Text>
-      </ScrollView>
+      {/* Reader Content - Show PDF if purchased, otherwise show sample */}
+      {isPurchased && pdfUrl ? (
+        <WebView
+          source={{ uri: pdfUrl }}
+          style={styles.readerContent}
+          startInLoadingState={true}
+          renderLoading={() => (
+            <View style={[styles.loadingContainer, { backgroundColor: currentTheme.background }]}>
+              <ActivityIndicator size="large" color={themeColors.primary.main} />
+              <Text style={{ marginTop: 16, color: currentTheme.text }}>
+                Loading PDF...
+              </Text>
+            </View>
+          )}
+          onError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            console.error('WebView error: ', nativeEvent);
+            Alert.alert('Error', 'Failed to load PDF. Please try again.');
+          }}
+        />
+      ) : (
+        <ScrollView
+          style={styles.readerContent}
+          contentContainerStyle={styles.readerContentContainer}
+        >
+          {!isPurchased && !sample && (
+            <View style={styles.sampleNotice}>
+              <Text style={[styles.sampleNoticeText, { color: currentTheme.text }]}>
+                📖 Sample Preview
+              </Text>
+              <Text style={[styles.sampleNoticeSubtext, { color: currentTheme.text }]}>
+                Purchase this book to read the full content
+              </Text>
+            </View>
+          )}
+          <Text style={[styles.readerText, { color: currentTheme.text, fontSize }]}>
+            {bookContent}
+          </Text>
+        </ScrollView>
+      )}
 
       {/* Reader Controls */}
       {!isAudioMode && (
