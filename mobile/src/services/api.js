@@ -433,15 +433,17 @@ class ApiClient {
     return this.request(`/api/youtube-channels${query ? `?${query}` : ''}`);
   }
 
-  // Purchase API
-  async purchaseBook(userId, bookId, paymentMethod, transactionId) {
+  // Purchase API - Create purchase record directly (no verification)
+  async purchaseBook(userId, bookId, paymentMethod, transactionId, audioBookId = null, amount = null) {
     return this.request('/api/purchase', {
       method: 'POST',
       body: JSON.stringify({
         user_id: userId,
-        book_id: bookId,
+        book_id: bookId || null,
+        audio_book_id: audioBookId || null,
         payment_method: paymentMethod,
         transaction_id: transactionId,
+        amount: amount,
       }),
     });
   }

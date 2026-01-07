@@ -206,69 +206,53 @@ const PaymentScreen = ({ route, navigation }) => {
               hasSignature: !!data.razorpay_signature,
             });
 
-          // Validate required data
-          if (!data.razorpay_payment_id) {
-            throw new Error('Payment ID is missing from Razorpay response');
-          }
+            // Validate required data
+            if (!data.razorpay_payment_id) {
+              throw new Error('Payment ID is missing from Razorpay response');
+            }
 
-          // Note: Signature might not be present in direct payment responses
-          // We'll verify using Razorpay API instead if signature is missing
-          if (!data.razorpay_signature) {
-            console.warn('⚠️ Payment signature not in response, will verify via Razorpay API');
-          }
-
-            setProcessing(true); // Keep loading while verifying
+            setProcessing(true); // Keep loading while creating purchase
 
             try {
-              // Verify payment with backend
-              // Note: razorpay_order_id might not be present if order was created by Razorpay internally
-              // Razorpay always returns order_id in the response, check all possible fields
-              const orderId = data.razorpay_order_id || data.order_id || data.razorpay_orderId || null;
-
-              console.log('📤 Sending verification request:', {
-                orderId: orderId || 'null (will use payment_id)',
+              // Create purchase record directly - no verification needed
+              console.log('📦 Creating purchase record:', {
                 paymentId: data.razorpay_payment_id,
-                hasSignature: !!data.razorpay_signature,
                 userId,
                 bookId,
                 audioBookId,
                 amount: itemPrice,
               });
 
-            const verifyResponse = await apiClient.verifyRazorpayPayment(
-              orderId, // Can be null for direct payments
-              data.razorpay_payment_id,
-              data.razorpay_signature || null, // Can be null, will verify via API
-              userId,
-              bookId,
-              audioBookId,
-              itemPrice
-            );
+              // Use purchaseBook API to create the purchase record directly
+              const purchaseResponse = await apiClient.purchaseBook(
+                userId,
+                bookId,
+                'razorpay',
+                data.razorpay_payment_id,
+                audioBookId,
+                itemPrice
+              );
 
-              console.log('✅ Payment verification response:', verifyResponse);
+              console.log('✅ Purchase created successfully:', purchaseResponse);
 
-              if (verifyResponse.success) {
-                Alert.alert(
-                  'Payment Successful! 🎉',
-                  'Your payment was successful and the book has been added to your library.',
-                  [
-                    {
-                      text: 'OK',
-                      onPress: () => {
-                        // Navigate back and refresh if needed
-                        navigation.goBack();
-                      }
-                    },
-                  ]
-                );
-              } else {
-                throw new Error('Payment verification failed');
-              }
-            } catch (verifyError) {
-              console.error('❌ Payment verification error:', verifyError);
               Alert.alert(
-                'Verification Error',
-                'Your payment was successful, but we encountered an issue verifying it. Please contact support with your payment ID: ' + (data.razorpay_payment_id || 'N/A'),
+                'Payment Successful! 🎉',
+                'Your payment was successful and the book has been added to your library.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      // Navigate back and refresh if needed
+                      navigation.goBack();
+                    }
+                  },
+                ]
+              );
+            } catch (purchaseError) {
+              console.error('❌ Purchase creation error:', purchaseError);
+              Alert.alert(
+                'Purchase Error',
+                'Your payment was successful, but we encountered an issue creating your purchase. Please contact support with your payment ID: ' + (data.razorpay_payment_id || 'N/A'),
                 [{ text: 'OK' }]
               );
             } finally {
