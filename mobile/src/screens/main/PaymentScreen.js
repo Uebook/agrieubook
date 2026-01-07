@@ -106,7 +106,7 @@ const PaymentScreen = ({ route, navigation }) => {
       // Razorpay will create the order internally
       const paymentAmount = Math.round(itemPrice * 100); // Convert to paise
       const email = userData?.email || '';
-      
+
       const options = {
         description: 'Order Payment',
         image: item.cover_image_url || item.cover_url || 'https://i.imgur.com/3l7C2Jn.png',
@@ -195,22 +195,46 @@ const PaymentScreen = ({ route, navigation }) => {
             await AsyncStorage.removeItem('pending_razorpay_payment');
             setRazorpayOpened(false);
 
-            // Payment success - Razorpay SDK returns payment data
-            console.log('✅ Payment success data:', {
-              razorpay_payment_id: data.razorpay_payment_id,
-              razorpay_order_id: data.razorpay_order_id,
-              razorpay_signature: data.razorpay_signature ? 'present' : 'missing',
-            });
+          // Payment success - Razorpay SDK returns payment data
+          console.log('✅ Payment success data (full):', JSON.stringify(data, null, 2));
+          console.log('✅ Payment success data (summary):', {
+            razorpay_payment_id: data.razorpay_payment_id,
+            razorpay_order_id: data.razorpay_order_id,
+            razorpay_signature: data.razorpay_signature ? 'present' : 'missing',
+            hasOrderId: !!data.razorpay_order_id,
+            hasPaymentId: !!data.razorpay_payment_id,
+            hasSignature: !!data.razorpay_signature,
+          });
 
-            setProcessing(true); // Keep loading while verifying
+          // Validate required data
+          if (!data.razorpay_payment_id) {
+            throw new Error('Payment ID is missing from Razorpay response');
+          }
+
+          if (!data.razorpay_signature) {
+            throw new Error('Payment signature is missing from Razorpay response');
+          }
+
+          setProcessing(true); // Keep loading while verifying
 
           try {
             // Verify payment with backend
-            // Note: razorpay_order_id might not be present if order was created by Razorpay
-            const orderId = data.razorpay_order_id || data.order_id || 'direct_payment';
-            
+            // Note: razorpay_order_id might not be present if order was created by Razorpay internally
+            // Razorpay always returns order_id in the response, check all possible fields
+            const orderId = data.razorpay_order_id || data.order_id || data.razorpay_orderId || null;
+
+            console.log('📤 Sending verification request:', {
+              orderId: orderId || 'null (will use payment_id)',
+              paymentId: data.razorpay_payment_id,
+              hasSignature: !!data.razorpay_signature,
+              userId,
+              bookId,
+              audioBookId,
+              amount: itemPrice,
+            });
+
             const verifyResponse = await apiClient.verifyRazorpayPayment(
-              orderId,
+              orderId, // Can be null for direct payments
               data.razorpay_payment_id,
               data.razorpay_signature,
               userId,
