@@ -1,29 +1,22 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { dummyBooks, dummyAuthors } from '@/lib/dummyData';
+import apiClient from '@/lib/api/client';
 
 export default function BookEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const book = dummyBooks.find(b => b.id === id);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [book, setBook] = useState<any>(null);
+  const [authors, setAuthors] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  const [formData, setFormData] = useState(book ? {
-    title: book.title,
-    authorId: book.authorId,
-    summary: book.summary,
-    price: book.price.toString(),
-    originalPrice: book.originalPrice.toString(),
-    pages: book.pages.toString(),
-    language: book.language,
-    categoryId: book.categoryId,
-    isbn: book.isbn,
-    isFree: book.isFree,
-    status: book.status,
-  } : {
+  const [formData, setFormData] = useState({
     title: '',
     authorId: '',
     summary: '',
@@ -38,37 +31,68 @@ export default function BookEditPage({ params }: { params: Promise<{ id: string 
   });
 
   const [coverImages, setCoverImages] = useState<File[]>([]);
-  const [coverImagePreviews, setCoverImagePreviews] = useState<string[]>(book?.coverImages || []);
-  const [loading, setLoading] = useState(false);
+  const [coverImagePreviews, setCoverImagePreviews] = useState<string[]>([]);
+  const [existingCoverImages, setExistingCoverImages] = useState<string[]>([]);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<string>('');
 
-  const categories = [
-    { id: '1', name: 'Organic Farming' },
-    { id: '2', name: 'Crop Management' },
-    { id: '3', name: 'Livestock' },
-    { id: '4', name: 'Agricultural Technology' },
-  ];
+  // Fetch book, authors, and categories on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch book
+        const bookResponse = await apiClient.getBook(id);
+        const bookData = bookResponse.book;
+        setBook(bookData);
 
-  if (!book) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header />
-        <div className="flex">
-          <Sidebar />
-          <main className="flex-1 p-8">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Book Not Found</h2>
-              <button
-                onClick={() => router.push('/books')}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                Back to Books
-              </button>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
+        // Set form data from book
+        setFormData({
+          title: bookData.title || '',
+          authorId: bookData.author_id || bookData.author?.id || '',
+          summary: bookData.summary || '',
+          price: bookData.price?.toString() || '0',
+          originalPrice: bookData.original_price?.toString() || bookData.price?.toString() || '0',
+          pages: bookData.pages?.toString() || '',
+          language: bookData.language || 'English',
+          categoryId: bookData.category_id || bookData.category?.id || '',
+          isbn: bookData.isbn || '',
+          isFree: bookData.is_free || false,
+          status: bookData.status || 'pending',
+        });
+
+        // Set existing cover images
+        if (bookData.cover_images && Array.isArray(bookData.cover_images)) {
+          setExistingCoverImages(bookData.cover_images);
+          setCoverImagePreviews(bookData.cover_images);
+        } else if (bookData.cover_image_url) {
+          setExistingCoverImages([bookData.cover_image_url]);
+          setCoverImagePreviews([bookData.cover_image_url]);
+        }
+
+        // Set PDF preview if exists
+        if (bookData.pdf_url) {
+          setPdfPreview('Current PDF file');
+        }
+
+        // Fetch authors
+        const authorsResponse = await apiClient.getAuthors();
+        setAuthors(authorsResponse.authors || []);
+
+        // Fetch categories
+        const categoriesResponse = await apiClient.getCategories();
+        setCategories(categoriesResponse.categories || []);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        alert('Failed to load book data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -97,29 +121,135 @@ export default function BookEditPage({ params }: { params: Promise<{ id: string 
   };
 
   const handleImageRemove = (index: number) => {
-    // Remove from both arrays
-    const existingCount = book?.coverImages?.length || 0;
-    if (index < existingCount) {
-      // Existing image (from URL) - just remove from preview
+    // Check if it's an existing image (URL) or new file
+    if (index < existingCoverImages.length) {
+      // Remove existing image
+      const newExisting = existingCoverImages.filter((_, i) => i !== index);
+      setExistingCoverImages(newExisting);
       setCoverImagePreviews(coverImagePreviews.filter((_, i) => i !== index));
     } else {
-      // New file - remove from both arrays
-      const fileIndex = index - existingCount;
+      // Remove new file
+      const fileIndex = index - existingCoverImages.length;
       setCoverImages(coverImages.filter((_, i) => i !== fileIndex));
       setCoverImagePreviews(coverImagePreviews.filter((_, i) => i !== index));
     }
   };
 
+  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPdfFile(file);
+      setPdfPreview(file.name);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
+    setUploadProgress(0);
 
-    setTimeout(() => {
+    try {
+      let pdfUrl = book?.pdf_url || null;
+      let coverImageUrls = [...existingCoverImages];
+
+      // Step 1: Upload new PDF file if provided
+      if (pdfFile) {
+        setUploadProgress(10);
+        try {
+          const pdfUploadResult = await apiClient.uploadFile(pdfFile, 'books', 'pdfs');
+          pdfUrl = pdfUploadResult.url || pdfUploadResult.path;
+        } catch (uploadError: any) {
+          console.error('PDF upload error:', uploadError);
+          throw new Error(`Failed to upload PDF: ${uploadError.message || 'Unknown error'}`);
+        }
+      }
+
+      // Step 2: Upload new cover images if provided
+      if (coverImages.length > 0) {
+        setUploadProgress(30);
+        for (let i = 0; i < coverImages.length; i++) {
+          try {
+            const coverResult = await apiClient.uploadFile(coverImages[i], 'books', 'covers');
+            const coverUrl = coverResult.url || coverResult.path;
+            coverImageUrls.push(coverUrl);
+            setUploadProgress(30 + (i + 1) * (50 / coverImages.length));
+          } catch (uploadError: any) {
+            console.error(`Cover image ${i + 1} upload error:`, uploadError);
+            // Continue with other images even if one fails
+          }
+        }
+      }
+
+      // Step 3: Update book record
+      setUploadProgress(80);
+      const bookData = {
+        title: formData.title,
+        author_id: formData.authorId,
+        summary: formData.summary,
+        price: parseFloat(formData.price) || 0,
+        original_price: parseFloat(formData.originalPrice) || parseFloat(formData.price) || 0,
+        pages: formData.pages ? parseInt(formData.pages) : null,
+        language: formData.language,
+        category_id: formData.categoryId,
+        isbn: formData.isbn || null,
+        is_free: formData.isFree,
+        status: formData.status,
+        pdf_url: pdfUrl,
+        cover_image_url: coverImageUrls[0] || null,
+        cover_images: coverImageUrls,
+      };
+
+      await apiClient.updateBook(id, bookData);
+      setUploadProgress(100);
+
       alert('Book updated successfully!');
       router.push(`/books/${id}`);
-      setLoading(false);
-    }, 1000);
+    } catch (error: any) {
+      console.error('Error updating book:', error);
+      alert(`Error: ${error.message || 'Failed to update book'}`);
+    } finally {
+      setSaving(false);
+      setUploadProgress(0);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1 p-8">
+            <div className="text-center">
+              <p className="text-gray-600">Loading book data...</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (!book) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1 p-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Book Not Found</h2>
+              <button
+                onClick={() => router.push('/books')}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Back to Books
+              </button>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -165,7 +295,8 @@ export default function BookEditPage({ params }: { params: Promise<{ id: string 
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
-                    {dummyAuthors.map(author => (
+                    <option value="">Select Author</option>
+                    {authors.map(author => (
                       <option key={author.id} value={author.id}>{author.name}</option>
                     ))}
                   </select>
@@ -199,6 +330,7 @@ export default function BookEditPage({ params }: { params: Promise<{ id: string 
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
+                    <option value="">Select Category</option>
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
@@ -306,6 +438,31 @@ export default function BookEditPage({ params }: { params: Promise<{ id: string 
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    PDF File {!book.pdf_url && '*'}
+                  </label>
+                  <label className="inline-block px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 cursor-pointer mb-2">
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={handlePdfChange}
+                      className="hidden"
+                    />
+                    {pdfFile ? 'Change PDF File' : pdfPreview ? 'Change PDF File' : 'Upload PDF File'}
+                  </label>
+                  {pdfPreview && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm font-medium text-gray-900">📄 {pdfPreview}</p>
+                      {pdfFile && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Size: {(pdfFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Cover Images
                   </label>
                   <div className="space-y-4">
@@ -335,9 +492,9 @@ export default function BookEditPage({ params }: { params: Promise<{ id: string 
                             >
                               ×
                             </button>
-                            {index >= (book?.coverImages?.length || 0) && coverImages[index - (book?.coverImages?.length || 0)] && (
+                            {index >= existingCoverImages.length && coverImages[index - existingCoverImages.length] && (
                               <p className="text-xs text-gray-500 mt-1 truncate">
-                                {coverImages[index - (book?.coverImages?.length || 0)].name}
+                                {coverImages[index - existingCoverImages.length].name}
                               </p>
                             )}
                           </div>
@@ -348,13 +505,28 @@ export default function BookEditPage({ params }: { params: Promise<{ id: string 
                 </div>
               </div>
 
+              {saving && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Upload Progress</span>
+                    <span className="text-sm font-medium text-gray-700">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex space-x-4 pt-4">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={saving}
                   className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                 >
-                  {loading ? 'Updating...' : 'Update Book'}
+                  {saving ? 'Updating...' : 'Update Book'}
                 </button>
                 <button
                   type="button"
@@ -371,4 +543,3 @@ export default function BookEditPage({ params }: { params: Promise<{ id: string 
     </div>
   );
 }
-

@@ -15,7 +15,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { getBookById } from '../../services/dummyData';
+// Removed dummy data import - using API only
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
@@ -336,9 +336,7 @@ const BookDetailScreen = ({ route, navigation }) => {
         setBook(response.book);
       } catch (error) {
         console.error('Error fetching book:', error);
-        // Fallback to dummy data
-        const dummyBook = getBookById(bookId) || getBookById('1');
-        setBook(dummyBook);
+        setBook(null);
       } finally {
         setLoading(false);
       }

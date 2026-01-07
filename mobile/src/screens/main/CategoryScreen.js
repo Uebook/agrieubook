@@ -13,14 +13,15 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Header from '../../components/common/Header';
-import { books, categories, getBooksByCategory } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import { useCategories } from '../../context/CategoriesContext';
 import apiClient from '../../services/api';
 
 const CategoryScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
   const { userRole, userId } = useAuth();
+  const { categories: categoriesList } = useCategories();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { category, categoryId } = route.params || { category: 'All', categoryId: null };
@@ -29,50 +30,58 @@ const CategoryScreen = ({ route, navigation }) => {
 
   // Get category details
   const categoryData = useMemo(() => {
-    if (categoryId) {
-      return categories.find((cat) => cat.id === categoryId);
+    if (categoryId && categoriesList) {
+      return categoriesList.find((cat) => cat.id === categoryId);
     }
     return null;
-  }, [categoryId]);
+  }, [categoryId, categoriesList]);
 
   // Fetch books for this category from API
   useEffect(() => {
     const fetchBooks = async () => {
       try {
         setLoading(true);
+        console.log('📚 CategoryScreen: Fetching books for category:', { categoryId, category });
+        
         const params = {
           status: 'published',
           limit: 100,
-          ...(categoryId && { category: categoryId }),
         };
+        
+        // Add category filter if categoryId is provided
+        if (categoryId) {
+          params.category = categoryId;
+          console.log('📚 CategoryScreen: Added category filter:', categoryId);
+        }
         
         // If user is author, filter by author_id
         if (userRole === 'author' && userId) {
           params.author = userId;
+          console.log('📚 CategoryScreen: Added author filter:', userId);
         }
         
+        console.log('📚 CategoryScreen: API params:', params);
         const response = await apiClient.getBooks(params);
+        console.log('📚 CategoryScreen: API response:', {
+          booksCount: response.books?.length || 0,
+          total: response.pagination?.total || 0,
+        });
+        
         setCategoryBooks(response.books || []);
       } catch (error) {
-        console.error('Error fetching category books:', error);
-        // Fallback to dummy data
-        let filteredBooks;
-        if (categoryId) {
-          filteredBooks = getBooksByCategory(categoryId);
-        } else {
-          filteredBooks = books;
-        }
-        if (userRole === 'author' && userId) {
-          filteredBooks = filteredBooks.filter((book) => book.authorId === userId);
-        }
-        setCategoryBooks(filteredBooks);
+        console.error('❌ CategoryScreen: Error fetching category books:', error);
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+        });
+        setCategoryBooks([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchBooks();
-  }, [categoryId, userRole, userId]);
+  }, [categoryId, userRole, userId, category]);
 
   const styles = StyleSheet.create({
     container: {

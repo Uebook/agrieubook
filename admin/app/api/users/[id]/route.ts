@@ -10,10 +10,12 @@ export async function GET(
     const supabase = createServerClient();
     const { id } = await params;
     
+    // Get user - should be a reader (not publisher/author)
     const { data: user, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', id)
+      .eq('role', 'reader')
       .single();
     
     if (error) {

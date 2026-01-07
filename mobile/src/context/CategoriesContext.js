@@ -5,7 +5,6 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiClient from '../services/api';
-import { categories as dummyCategories } from '../services/dummyData';
 
 const CategoriesContext = createContext({
   categories: [],
@@ -23,8 +22,8 @@ export const useCategories = () => {
 };
 
 export const CategoriesProvider = ({ children }) => {
-  const [categories, setCategories] = useState(dummyCategories); // Start with dummy data
-  const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchCategories = async () => {
@@ -46,14 +45,13 @@ export const CategoriesProvider = ({ children }) => {
         console.log(`✅ Loaded ${mappedCategories.length} categories from API`);
         setCategories(mappedCategories);
       } else {
-        console.warn('⚠️ No categories found in API response, using dummy data');
-        // Keep dummy categories as fallback
+        console.warn('⚠️ No categories found in API response');
+        setCategories([]);
       }
     } catch (err) {
       console.error('❌ Error fetching categories from API:', err);
-      console.log('🔄 Falling back to dummy categories');
       setError(err.message || 'Failed to fetch categories');
-      // Keep dummy categories as fallback
+      setCategories([]);
     } finally {
       setLoading(false);
     }

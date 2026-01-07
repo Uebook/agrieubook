@@ -369,23 +369,66 @@ async function handleFileUpload(formData: FormData) {
     
     if (error) {
       console.error('Supabase upload error:', error);
+      console.error('Upload details:', {
+        bucket,
+        uniqueFileName,
+        fileSize: fileBuffer.length,
+        contentType,
+      });
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to upload file';
+      const errorAny = error as any;
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (errorAny.statusCode === 404 || errorAny.status === 404) {
+        errorMessage = `Bucket "${bucket}" not found. Please create the bucket in Supabase Storage.`;
+      } else if (errorAny.statusCode === 403 || errorAny.status === 403) {
+        errorMessage = `Permission denied for bucket "${bucket}". Please check bucket permissions.`;
+      } else if (errorAny.statusCode === 413 || errorAny.status === 413) {
+        errorMessage = 'File too large. Please reduce the file size.';
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to upload file: ' + error.message },
+        { error: errorMessage },
         { status: 500 }
       );
     }
     
-    // Get public URL
+    // Try to get public URL first
     const { data: urlData } = supabase.storage
       .from(bucket)
       .getPublicUrl(uniqueFileName);
+    
+    // Also generate a signed URL as fallback (valid for 1 year)
+    // This works even if bucket is private
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(uniqueFileName, 31536000); // 1 year expiry
+    
+    // Use signed URL if available, otherwise use public URL
+    // Note: If bucket is private, public URL won't work, so signed URL is better
+    const finalUrl = signedUrlData?.signedUrl || urlData.publicUrl;
+    
+    if (!finalUrl) {
+      console.error('Failed to generate URL:', { signedUrlError, publicUrl: urlData.publicUrl });
+      return NextResponse.json(
+        { 
+          error: 'Failed to generate file URL. Please ensure the bucket exists and is accessible.',
+          details: signedUrlError?.message || 'No URL generated'
+        },
+        { status: 500 }
+      );
+    }
     
     // Return in the exact format expected by the mobile app
     // { success: true, path: ..., url: ... }
     return {
       success: true,
       path: uniqueFileName,
-      url: urlData.publicUrl,
+      url: finalUrl,
+      publicUrl: urlData.publicUrl, // Include public URL even if we use signed
+      signedUrl: signedUrlData?.signedUrl, // Include signed URL
     };
   } catch (error: any) {
     console.error('Error in file upload:', error);

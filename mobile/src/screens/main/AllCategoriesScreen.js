@@ -12,54 +12,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Header from '../../components/common/Header';
-import { getBooksByCategory } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
 import { useCategories } from '../../context/CategoriesContext';
-import apiClient from '../../services/api';
 
 const AllCategoriesScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier, t } = useSettings();
   const { categories: categoriesList, loading: categoriesLoading } = useCategories();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
-  const [categoryBookCounts, setCategoryBookCounts] = useState({});
-  const [loading, setLoading] = useState(false);
-
-  // Fetch book counts for each category
-  useEffect(() => {
-    if (!categoriesList || categoriesList.length === 0) return;
-    
-    const fetchCategoryCounts = async () => {
-      try {
-        setLoading(true);
-        const counts = {};
-        
-        // Fetch book count for each category
-        for (const category of categoriesList) {
-          try {
-            const response = await apiClient.getBooks({
-              category: category.id,
-              status: 'published',
-              limit: 1,
-            });
-            // Get total count from pagination if available
-            counts[category.id] = response.pagination?.total || response.books?.length || 0;
-          } catch (error) {
-            console.error(`Error fetching count for category ${category.id}:`, error);
-            counts[category.id] = getBooksByCategory(category.id).length;
-          }
-        }
-        
-        setCategoryBookCounts(counts);
-      } catch (error) {
-        console.error('Error fetching category counts:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCategoryCounts();
-  }, [categoriesList]);
 
   const styles = StyleSheet.create({
     container: {
@@ -88,30 +48,34 @@ const AllCategoriesScreen = ({ navigation }) => {
       fontWeight: '600',
       color: themeColors.text.primary,
       textAlign: 'center',
-      marginBottom: 8,
+      marginBottom: 12,
     },
-    categoryCount: {
+    viewBooksButton: {
+      backgroundColor: themeColors.primary.main,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
+      marginTop: 4,
+    },
+    viewBooksButtonText: {
+      color: themeColors.text.light || '#FFFFFF',
       fontSize: 12 * fontSizeMultiplier,
-      color: themeColors.text.secondary,
+      fontWeight: '600',
     },
   });
 
   const renderCategoryItem = ({ item }) => {
-    const bookCount = categoryBookCounts[item.id] !== undefined 
-      ? categoryBookCounts[item.id] 
-      : getBooksByCategory(item.id).length;
-    
     return (
-      <TouchableOpacity
-        style={styles.categoryCard}
-        onPress={() => navigation.navigate('Category', { category: item.name, categoryId: item.id })}
-      >
-        <Text style={styles.categoryIcon}>{item.icon}</Text>
+      <View style={styles.categoryCard}>
+        <Text style={styles.categoryIcon}>{item.icon || '📚'}</Text>
         <Text style={styles.categoryText}>{item.name}</Text>
-        <Text style={styles.categoryCount}>
-          {bookCount} {bookCount === 1 ? 'book' : 'books'}
-        </Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.viewBooksButton}
+          onPress={() => navigation.navigate('Category', { category: item.name, categoryId: item.id })}
+        >
+          <Text style={styles.viewBooksButtonText}>View Books</Text>
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -121,7 +85,7 @@ const AllCategoriesScreen = ({ navigation }) => {
         title={t('browseCategories') || 'Browse Categories'}
         navigation={navigation}
       />
-      {loading || categoriesLoading ? (
+      {categoriesLoading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
           <ActivityIndicator size="large" color={themeColors.primary.main} />
         </View>

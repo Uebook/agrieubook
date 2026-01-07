@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import apiClient from '@/lib/api/client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,17 +16,26 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    // Simulate login (replace with actual API call in phase 2)
-    setTimeout(() => {
-      if (email === 'admin@agribook.com' && password === 'admin123') {
-        // Store auth token (in phase 2, use proper auth)
+    try {
+      const response = await apiClient.login(email, password);
+      
+      if (response.success && response.user) {
+        // Store auth data
         localStorage.setItem('adminAuth', 'true');
+        localStorage.setItem('adminUser', JSON.stringify(response.user));
+        localStorage.setItem('adminToken', response.token || response.user.id);
+        
+        // Redirect to dashboard
         router.push('/dashboard');
       } else {
         setError('Invalid email or password');
         setLoading(false);
       }
-    }, 1000);
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || err.error || 'Failed to login. Please check your credentials.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -93,9 +103,12 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-600">
-          <p>Demo Credentials:</p>
+          <p>Default Admin Credentials:</p>
           <p className="font-mono text-xs mt-1">Email: admin@agribook.com</p>
           <p className="font-mono text-xs">Password: admin123</p>
+          <p className="text-xs mt-2 text-gray-500">
+            Create admin user in database: database/create_admin_user.sql
+          </p>
         </div>
       </div>
     </div>

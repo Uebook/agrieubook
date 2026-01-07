@@ -17,7 +17,7 @@ import {
 // After rebuilding the app, you can switch back to: import Slider from '@react-native-community/slider';
 import Slider from '../../components/common/CustomSlider';
 import Header from '../../components/common/Header';
-import { getAudioBooks } from '../../services/dummyData';
+// Removed dummy data import - using API only
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
@@ -51,10 +51,7 @@ const AudioBookScreen = ({ route, navigation }) => {
         setAudioBook(response.audioBook);
       } catch (error) {
         console.error('Error fetching audio book:', error);
-        // Fallback to dummy data
-        const audioBooks = getAudioBooks();
-        const dummyAudio = audioBooks.find((a) => a.id === audioId) || audioBooks[0];
-        setAudioBook(dummyAudio);
+        setAudioBook(null);
       } finally {
         setLoading(false);
       }

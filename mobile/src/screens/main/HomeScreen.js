@@ -15,22 +15,16 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Colors from '../../../color';
-import {
-  continueReadingBooks,
-  trendingBooks,
-  recommendedBooks,
-  categories,
-  getAudioBooks,
-  books,
-  getBooksByAuthor,
-} from '../../services/dummyData';
+// Removed dummy data imports - using API only
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
+import { useCategories } from '../../context/CategoriesContext';
 import apiClient from '../../services/api';
 
 const HomeScreen = ({ navigation }) => {
   const { userRole, userId, userData } = useAuth();
   const { t, getThemeColors, getFontSizeMultiplier } = useSettings();
+  const { categories } = useCategories();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const isAuthor = userRole === 'author';
@@ -81,18 +75,8 @@ const HomeScreen = ({ navigation }) => {
         }
       } catch (error) {
         console.error('Error fetching data:', error);
-        // Fallback to dummy data on error
-        let fallbackBooks = books;
-        let fallbackAudio = getAudioBooks();
-        
-        // Filter by author if needed
-        if (isAuthor && userId) {
-          fallbackBooks = books.filter((book) => book.authorId === userId);
-          fallbackAudio = fallbackAudio.filter((audio) => audio.authorId === userId);
-        }
-        
-        setAllBooks(fallbackBooks);
-        setAllAudioBooks(fallbackAudio);
+        setAllBooks([]);
+        setAllAudioBooks([]);
       } finally {
         setLoading(false);
       }
@@ -161,7 +145,6 @@ const HomeScreen = ({ navigation }) => {
         setContinueReading(continueBooks.slice(0, 5));
       } catch (error) {
         console.error('Error fetching continue reading:', error);
-        // Fallback to empty array or dummy data
         setContinueReading([]);
       }
     };
@@ -169,8 +152,10 @@ const HomeScreen = ({ navigation }) => {
     fetchContinueReading();
   }, [userId, isAuthor]);
   
-  const trending = isAuthor ? [] : (allBooks.slice(0, 10) || trendingBooks);
-  const recommendations = isAuthor ? [] : (allBooks.slice(0, 10) || recommendedBooks);
+  // Trending: Show 3 published books from database
+  const trending = isAuthor ? [] : allBooks.slice(0, 3);
+  // Recommended: Show up to 5 published books from database
+  const recommendations = isAuthor ? [] : allBooks.slice(0, 5);
   const audioPodcasts = isAuthor ? [] : allAudioBooks;
 
   const getGreeting = () => {
@@ -888,13 +873,13 @@ const HomeScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
           <View style={styles.categoriesGrid}>
-            {categories.slice(0, 4).map((cat) => (
+            {(categories || []).slice(0, 4).map((cat) => (
               <TouchableOpacity
                 key={cat.id}
                 style={styles.categoryCard}
                 onPress={() => navigation.navigate('Category', { category: cat.name, categoryId: cat.id })}
               >
-                <Text style={styles.categoryIcon}>{cat.icon}</Text>
+                <Text style={styles.categoryIcon}>{cat.icon || '📚'}</Text>
                 <Text style={styles.categoryText}>{cat.name}</Text>
               </TouchableOpacity>
             ))}

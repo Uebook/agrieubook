@@ -17,11 +17,12 @@ import {
 } from 'react-native';
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
+import { useCategories } from '../../context/CategoriesContext';
 import apiClient from '../../services/api';
-import { categories } from '../../services/dummyData';
 
 const YouTubeChannelsScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
+  const { categories: categoriesList } = useCategories();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -234,7 +235,7 @@ const YouTubeChannelsScreen = ({ navigation }) => {
         </View>
         <View style={styles.channelCategories}>
           {(item.category_ids || []).map((catId) => {
-            const category = categories.find((cat) => cat.id === catId);
+            const category = categoriesList?.find((cat) => cat.id === catId);
             return category ? (
               <View key={catId} style={styles.categoryTag}>
                 <Text style={styles.categoryTagText}>{category.icon}</Text>
@@ -274,7 +275,7 @@ const YouTubeChannelsScreen = ({ navigation }) => {
             All Channels
           </Text>
         </TouchableOpacity>
-        {categories.map((category) => (
+        {(categoriesList || []).map((category) => (
           <TouchableOpacity
             key={category.id}
             style={[

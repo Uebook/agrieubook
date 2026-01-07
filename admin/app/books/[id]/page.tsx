@@ -182,7 +182,7 @@ export default function BookViewPage({ params }: { params: Promise<{ id: string 
                 <div className="space-y-4">
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900">{book.title}</h1>
-                    <p className="text-gray-600 mt-1">
+                    <p className="text-gray-700 font-medium mt-1">
                       By {book.author?.name || 'Unknown Author'}
                     </p>
                   </div>
@@ -190,7 +190,7 @@ export default function BookViewPage({ params }: { params: Promise<{ id: string 
                   <div className="flex items-center space-x-2">
                     {getStatusBadge(book.status || 'pending')}
                     {book.rating && (
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm font-medium text-gray-900">
                         ⭐ {book.rating.toFixed(1)} ({book.reviews_count || 0} reviews)
                       </span>
                     )}
@@ -199,7 +199,7 @@ export default function BookViewPage({ params }: { params: Promise<{ id: string 
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Price:</span>
-                      <span className="font-semibold">
+                      <span className="font-semibold text-gray-900">
                         {book.is_free ? 'Free' : `₹${book.price || 0}`}
                         {book.original_price && book.price && book.original_price > book.price && (
                           <span className="ml-2 text-sm text-gray-500 line-through">₹{book.original_price}</span>
@@ -208,39 +208,39 @@ export default function BookViewPage({ params }: { params: Promise<{ id: string 
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Category:</span>
-                      <span className="font-medium">{book.category?.name || 'N/A'}</span>
+                      <span className="font-medium text-gray-900">{book.category?.name || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Language:</span>
-                      <span className="font-medium">{book.language || 'N/A'}</span>
+                      <span className="font-medium text-gray-900">{book.language || 'N/A'}</span>
                     </div>
                     {book.pages && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">Pages:</span>
-                        <span className="font-medium">{book.pages}</span>
+                        <span className="font-medium text-gray-900">{book.pages}</span>
                       </div>
                     )}
                     {book.isbn && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">ISBN:</span>
-                        <span className="font-medium">{book.isbn}</span>
+                        <span className="font-medium text-gray-900">{book.isbn}</span>
                       </div>
                     )}
                     {book.views_count !== undefined && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">Views:</span>
-                        <span className="font-medium">{book.views_count.toLocaleString()}</span>
+                        <span className="font-medium text-gray-900">{book.views_count.toLocaleString()}</span>
                       </div>
                     )}
                     {book.published_date && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">Published:</span>
-                        <span className="font-medium">{new Date(book.published_date).toLocaleDateString()}</span>
+                        <span className="font-medium text-gray-900">{new Date(book.published_date).toLocaleDateString()}</span>
                       </div>
                     )}
                     <div className="flex justify-between">
                       <span className="text-gray-600">Created:</span>
-                      <span className="font-medium">
+                      <span className="font-medium text-gray-900">
                         {book.created_at ? new Date(book.created_at).toLocaleDateString() : 'N/A'}
                       </span>
                     </div>

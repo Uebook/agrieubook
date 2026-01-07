@@ -31,13 +31,31 @@ class ApiClient {
       const response = await fetch(url, config);
       
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(error.error || `HTTP error! status: ${response.status}`);
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          // If response is not JSON, get text
+          const text = await response.text();
+          errorData = { error: text || 'Request failed' };
+        }
+        
+        const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${response.status}`;
+        const error = new Error(errorMessage);
+        error.status = response.status;
+        error.details = errorData.details;
+        throw error;
       }
 
       return await response.json();
     } catch (error) {
       console.error(`API Error (${endpoint}):`, error);
+      // Re-throw with more context if it's a network error
+      if (error.message === 'Network request failed' || error.name === 'TypeError') {
+        const networkError = new Error('Network error: Please check your internet connection');
+        networkError.originalError = error;
+        throw networkError;
+      }
       throw error;
     }
   }
@@ -424,6 +442,35 @@ class ApiClient {
         book_id: bookId,
         payment_method: paymentMethod,
         transaction_id: transactionId,
+      }),
+    });
+  }
+
+  // Razorpay API
+  async createRazorpayOrder(amount, bookId, audioBookId, userId) {
+    return this.request('/api/payments/razorpay/order', {
+      method: 'POST',
+      body: JSON.stringify({
+        amount,
+        currency: 'INR',
+        bookId,
+        audioBookId,
+        userId,
+      }),
+    });
+  }
+
+  async verifyRazorpayPayment(orderId, paymentId, signature, userId, bookId, audioBookId, amount) {
+    return this.request('/api/payments/razorpay/verify', {
+      method: 'POST',
+      body: JSON.stringify({
+        razorpay_order_id: orderId,
+        razorpay_payment_id: paymentId,
+        razorpay_signature: signature,
+        userId,
+        bookId,
+        audioBookId,
+        amount,
       }),
     });
   }

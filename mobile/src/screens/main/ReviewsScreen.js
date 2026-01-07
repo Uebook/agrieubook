@@ -16,7 +16,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { reviews as dummyReviews, getBookById } from '../../services/dummyData'; // Fallback
+// Removed dummy data import - using API only
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
@@ -71,12 +71,9 @@ const ReviewsScreen = ({ route, navigation }) => {
         }
       } catch (err) {
         console.error('Error fetching reviews:', err);
-        setError('Failed to load reviews');
-        // Fallback to dummy data
-        const dummyBook = getBookById(bookId);
-        setBook(dummyBook);
-        const filteredReviews = dummyReviews.filter((r) => r.bookId === bookId);
-        setBookReviews(filteredReviews);
+        setError('Failed to load reviews. Please try again later.');
+        setBook(null);
+        setBookReviews([]);
       } finally {
         setLoading(false);
       }

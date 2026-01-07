@@ -43,24 +43,34 @@ const GovernmentCurriculumScreen = ({ navigation }) => {
       try {
         setLoading(true);
         setError(null);
+        console.log('📚 GovernmentCurriculumScreen: Fetching curriculums...', { selectedState });
+        
         const params = {
-          status: 'active',
+          status: 'active', // API now defaults to 'active', but we explicitly pass it
           limit: 100,
         };
         if (selectedState) {
           params.state = selectedState;
+          console.log('📚 GovernmentCurriculumScreen: Added state filter:', selectedState);
         }
+        
+        console.log('📚 GovernmentCurriculumScreen: API params:', params);
         const response = await apiClient.getCurriculums(params);
+        console.log('📚 GovernmentCurriculumScreen: API response:', {
+          curriculumsCount: response.curriculums?.length || 0,
+          total: response.pagination?.total || 0,
+        });
+        
         setCurriculums(response.curriculums || []);
       } catch (err) {
-        console.error('Error fetching curriculums:', err);
-        setError('Failed to load curriculum data.');
-        // Fallback to dummy data
-        if (selectedState) {
-          setCurriculums(getCurriculumsByState(selectedState));
-        } else {
-          setCurriculums(governmentCurriculums);
-        }
+        console.error('❌ GovernmentCurriculumScreen: Error fetching curriculums:', err);
+        console.error('Error details:', {
+          message: err.message,
+          stack: err.stack,
+        });
+        setError('Failed to load curriculum data. Please try again.');
+        // Don't fallback to dummy data - show empty state instead
+        setCurriculums([]);
       } finally {
         setLoading(false);
       }

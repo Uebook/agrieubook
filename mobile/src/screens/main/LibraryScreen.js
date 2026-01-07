@@ -14,7 +14,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
-import { myLibraryBooks } from '../../services/dummyData';
+// Removed dummy data import - using API only
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
@@ -85,12 +85,7 @@ const LibraryScreen = ({ navigation }) => {
         }
       } catch (error) {
         console.error('Error fetching library:', error);
-        // Fallback to dummy data
-        let books = myLibraryBooks;
-        if (userRole === 'author' && userId) {
-          books = books.filter((book) => book.authorId === userId);
-        }
-        setMyBooks(books);
+        setMyBooks([]);
       } finally {
         setLoading(false);
       }

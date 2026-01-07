@@ -11,9 +11,11 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
     
+    // Filter to show only readers (not publishers/authors)
     const { data: users, error } = await supabase
       .from('users')
       .select('*')
+      .eq('role', 'reader')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     
@@ -27,7 +29,8 @@ export async function GET(request: NextRequest) {
     
     const { count: totalCount } = await supabase
       .from('users')
-      .select('*', { count: 'exact', head: true });
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'reader');
     
     return NextResponse.json({
       users: users || [],

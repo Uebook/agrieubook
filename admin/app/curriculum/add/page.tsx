@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import apiClient from '@/lib/api/client';
 
 const indianStates = [
   { id: 'up', name: 'Uttar Pradesh' },
@@ -41,17 +42,58 @@ export default function AddCurriculumPage() {
   const handleBannerImageAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      const newFiles = Array.from(files);
-      setBannerImages([...bannerImages, ...newFiles]);
-      
-      // Create previews
-      newFiles.forEach(file => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setBannerImagePreviews(prev => [...prev, reader.result as string]);
-        };
-        reader.readAsDataURL(file);
-      });
+      try {
+        const newFiles = Array.from(files);
+        
+        // Validate file types
+        const validFiles = newFiles.filter(file => {
+          if (!file.type.startsWith('image/')) {
+            alert(`File ${file.name} is not an image. Please select image files only.`);
+            return false;
+          }
+          // Check file size (max 10MB)
+          if (file.size > 10 * 1024 * 1024) {
+            alert(`File ${file.name} is too large. Maximum size is 10MB.`);
+            return false;
+          }
+          return true;
+        });
+        
+        if (validFiles.length === 0) {
+          e.target.value = '';
+          return;
+        }
+        
+        setBannerImages([...bannerImages, ...validFiles]);
+        
+        // Create previews
+        validFiles.forEach((file, index) => {
+          try {
+            const reader = new FileReader();
+            reader.onerror = (error) => {
+              console.error('Error reading file:', file.name, error);
+              // Don't show alert for preview errors, just log and continue
+              // The file is still valid and can be uploaded
+            };
+            reader.onloadend = () => {
+              if (reader.result) {
+                setBannerImagePreviews(prev => [...prev, reader.result as string]);
+              } else {
+                // If preview fails, add a placeholder
+                setBannerImagePreviews(prev => [...prev, '']);
+              }
+            };
+            reader.readAsDataURL(file);
+          } catch (error) {
+            console.error('Error creating preview for file:', file.name, error);
+            // Don't block upload if preview fails - add placeholder
+            setBannerImagePreviews(prev => [...prev, '']);
+          }
+        });
+      } catch (error) {
+        console.error('Error handling banner images:', error);
+        alert('Failed to select images. Please try again.');
+      }
     }
     e.target.value = '';
   };
@@ -79,12 +121,121 @@ export default function AddCurriculumPage() {
     
     setLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      alert('Curriculum added successfully! (This is dummy data - API integration in phase 2)');
-      router.push('/curriculum');
+    try {
+      // Step 1: Upload PDF file
+      const pdfFormData = new FormData();
+      pdfFormData.append('file', pdfFile);
+      pdfFormData.append('bucket', 'books'); // Use existing 'books' bucket
+      pdfFormData.append('folder', 'curriculum/pdfs'); // Organize in curriculum subfolder
+      pdfFormData.append('fileName', pdfFile.name);
+      pdfFormData.append('fileType', pdfFile.type || 'application/pdf');
+      
+      const pdfUploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
+        method: 'POST',
+        body: pdfFormData,
+      });
+      
+      if (!pdfUploadResponse.ok) {
+        const errorData = await pdfUploadResponse.json();
+        throw new Error(errorData.error || 'Failed to upload PDF file');
+      }
+      
+      const pdfResult = await pdfUploadResponse.json();
+      
+      // Check if result has error
+      if (pdfResult.error) {
+        throw new Error(pdfResult.error);
+      }
+      
+      const pdfUrl = pdfResult.url || pdfResult.path || pdfResult.publicUrl;
+      if (!pdfUrl) {
+        throw new Error('PDF upload succeeded but no URL returned');
+      }
+
+      // Step 2: Upload banner images
+      const bannerUrls: string[] = [];
+      for (let i = 0; i < bannerImages.length; i++) {
+        try {
+          const bannerFormData = new FormData();
+          bannerFormData.append('file', bannerImages[i]);
+          bannerFormData.append('bucket', 'books'); // Use existing 'books' bucket (same as PDFs)
+          bannerFormData.append('folder', 'curriculum/banners'); // Organize in curriculum subfolder
+          bannerFormData.append('fileName', bannerImages[i].name);
+          bannerFormData.append('fileType', bannerImages[i].type || 'image/jpeg');
+          
+          const bannerUploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
+            method: 'POST',
+            body: bannerFormData,
+          });
+          
+          if (!bannerUploadResponse.ok) {
+            const errorData = await bannerUploadResponse.json().catch(() => ({ 
+              error: `HTTP ${bannerUploadResponse.status}: ${bannerUploadResponse.statusText}` 
+            }));
+            throw new Error(errorData.error || `Failed to upload banner image: ${bannerImages[i].name}`);
+          }
+          
+          const bannerResult = await bannerUploadResponse.json();
+          
+          // Check if result has error
+          if (bannerResult.error) {
+            throw new Error(bannerResult.error);
+          }
+          
+          const bannerUrl = bannerResult.url || bannerResult.path || bannerResult.publicUrl;
+          if (!bannerUrl) {
+            throw new Error('Upload succeeded but no URL returned');
+          }
+          
+          bannerUrls.push(bannerUrl);
+        } catch (uploadError: any) {
+          console.error(`Error uploading banner image ${i + 1}:`, uploadError);
+          throw new Error(`Failed to upload banner image "${bannerImages[i].name}": ${uploadError.message || uploadError.error || 'Unknown error'}`);
+        }
+      }
+
+      // Step 3: Create curriculum record
+      const selectedState = indianStates.find(s => s.id === formData.state);
+      const curriculumData = {
+        title: formData.title,
+        description: formData.description || null,
+        state: formData.state,
+        state_name: selectedState?.name || formData.state,
+        language: formData.language,
+        pdf_url: pdfUrl,
+        banner_url: bannerUrls[0] || null,
+        // Note: cover_image_url is not in the schema, using banner_url instead
+        published_date: new Date().toISOString().split('T')[0], // Format as DATE (YYYY-MM-DD)
+        status: formData.status,
+      };
+      
+      console.log('Creating curriculum with data:', curriculumData);
+
+      const response = await apiClient.createCurriculum(curriculumData);
+      
+      if (response.curriculum) {
+        alert('Curriculum added successfully!');
+        router.push('/curriculum');
+      } else {
+        throw new Error('Curriculum creation returned no data');
+      }
+    } catch (error: any) {
+      console.error('Error adding curriculum:', error);
+      
+      // Extract error message from API response
+      let errorMessage = 'Failed to add curriculum';
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.error) {
+        errorMessage = error.error;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      alert(`Error: ${errorMessage}`);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (

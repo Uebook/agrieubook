@@ -49,10 +49,9 @@ export default function BooksPage() {
                 limit: 100, // Get more books for admin panel
             };
             
-            // Add status filter if not 'all'
-            if (filter !== 'all') {
-                params.status = filter;
-            }
+            // Always pass status parameter - 'all' to see all books, or specific status
+            // API now defaults to 'published', so we need to explicitly pass 'all' for admin
+            params.status = filter === 'all' ? 'all' : filter;
             
             const response = await apiClient.getBooks(params);
             setBooks(response.books || []);
@@ -61,6 +60,31 @@ export default function BooksPage() {
             setError(err.message || 'Failed to fetch books');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleApprove = async (bookId: string) => {
+        try {
+            await apiClient.updateBook(bookId, { status: 'published' });
+            // Refresh the list
+            fetchBooks();
+        } catch (err: any) {
+            console.error('Error approving book:', err);
+            alert(`Failed to approve book: ${err.message || 'Unknown error'}`);
+        }
+    };
+
+    const handleReject = async (bookId: string) => {
+        if (!confirm('Are you sure you want to reject this book?')) {
+            return;
+        }
+        try {
+            await apiClient.updateBook(bookId, { status: 'rejected' });
+            // Refresh the list
+            fetchBooks();
+        } catch (err: any) {
+            console.error('Error rejecting book:', err);
+            alert(`Failed to reject book: ${err.message || 'Unknown error'}`);
         }
     };
 
@@ -234,8 +258,18 @@ export default function BooksPage() {
                                                     </button>
                                                     {book.status === 'pending' && (
                                                         <>
-                                                            <button className="text-green-600 hover:text-green-900">Approve</button>
-                                                            <button className="text-red-600 hover:text-red-900">Reject</button>
+                                                            <button 
+                                                                onClick={() => handleApprove(book.id)}
+                                                                className="text-green-600 hover:text-green-900"
+                                                            >
+                                                                Approve
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleReject(book.id)}
+                                                                className="text-red-600 hover:text-red-900"
+                                                            >
+                                                                Reject
+                                                            </button>
                                                         </>
                                                     )}
                                                 </div>

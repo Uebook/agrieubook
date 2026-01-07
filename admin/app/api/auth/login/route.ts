@@ -16,26 +16,58 @@ export async function POST(request: NextRequest) {
     
     const supabase = createServerClient();
     
-    // Check if user exists
+    // Check if user exists with admin role
     const { data: user, error } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
+      .in('role', ['admin', 'publisher', 'author']) // Allow admin, publisher, or author to login
       .single();
     
     if (error || !user) {
+      console.error('Login error:', error);
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       );
     }
     
-    // TODO: Verify password hash (use bcrypt)
-    // For now, simple check - in production, hash passwords!
-    // const isValid = await bcrypt.compare(password, user.password_hash);
-    // if (!isValid) {
-    //   return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
-    // }
+    // Verify password - REQUIRED for security
+    let isValid = false;
+    
+    // Check password_hash field first
+    if (user.password_hash) {
+      // Compare password (password_hash should contain the password in plain text for now)
+      // In production, use bcrypt: isValid = await bcrypt.compare(password, user.password_hash);
+      isValid = user.password_hash === password;
+    } 
+    // Check password field if it exists
+    else if ((user as any).password) {
+      isValid = (user as any).password === password;
+    }
+    // If no password field exists, reject login
+    else {
+      console.error('User has no password set. Login rejected for security.');
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+    
+    // Reject login if password doesn't match
+    if (!isValid) {
+      console.error('Password mismatch for user:', email);
+      return NextResponse.json(
+        { error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+    
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', user.id);
     
     // Return user data
     return NextResponse.json({
@@ -46,9 +78,9 @@ export async function POST(request: NextRequest) {
         email: user.email,
         mobile: user.mobile,
         role: user.role,
+        avatar_url: user.avatar_url,
       },
-      // TODO: Generate JWT token
-      // token: generateJWT(user),
+      token: user.id, // Simple token for now (use JWT in production)
     });
   } catch (error) {
     console.error('Error in login:', error);

@@ -6,19 +6,33 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createServerClient();
     const searchParams = request.nextUrl.searchParams;
-    
+
     // Pagination
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
-    
+
     // Filters
     const categoryId = searchParams.get('category');
     const authorId = searchParams.get('author');
     const language = searchParams.get('language');
     const search = searchParams.get('search');
-    const status = searchParams.get('status'); // Don't default to 'published', allow 'all'
-    
+    // Default to 'published' for security - only show published books unless explicitly requested
+    // Admin panel can pass status='all' to see all books
+    const status = searchParams.get('status') || 'published';
+
+    console.log('📚 GET /api/books - Filters:', {
+      categoryId,
+      authorId,
+      language,
+      search,
+      status,
+      page,
+      limit,
+      categoryIdType: typeof categoryId,
+      categoryIdValue: categoryId,
+    });
+
     // Build query
     let query = supabase
       .from('books')
@@ -29,25 +43,33 @@ export async function GET(request: NextRequest) {
       `)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
-    
+
     // Apply status filter only if specified (not 'all')
     if (status && status !== 'all') {
       query = query.eq('status', status);
+      console.log('📚 Applied status filter:', status);
     }
-    
+
     // Apply filters
     if (categoryId) {
-      query = query.eq('category_id', categoryId);
+      // Ensure categoryId is treated as a string for UUID comparison
+      const categoryIdStr = String(categoryId).trim();
+      query = query.eq('category_id', categoryIdStr);
+      console.log('📚 Applied category filter:', {
+        original: categoryId,
+        processed: categoryIdStr,
+        type: typeof categoryIdStr,
+      });
     }
-    
+
     if (authorId) {
       query = query.eq('author_id', authorId);
     }
-    
+
     if (language) {
       query = query.eq('language', language);
     }
-    
+
     if (search) {
       // Full-text search
       query = query.textSearch('title', search, {
@@ -55,28 +77,80 @@ export async function GET(request: NextRequest) {
         config: 'english',
       });
     }
-    
+
     const { data: books, error, count } = await query;
-    
+
     if (error) {
-      console.error('Error fetching books:', error);
+      console.error('❌ Error fetching books:', error);
       return NextResponse.json(
-        { error: 'Failed to fetch books' },
+        { error: 'Failed to fetch books', details: error.message },
         { status: 500 }
       );
     }
-    
-    // Get total count for pagination
+
+    console.log('📚 GET /api/books - Results:', {
+      booksCount: books?.length || 0,
+      hasError: !!error,
+    });
+
+    // Get total count for pagination (apply same filters)
     let countQuery = supabase
       .from('books')
       .select('*', { count: 'exact', head: true });
-    
+
     if (status && status !== 'all') {
       countQuery = countQuery.eq('status', status);
+      console.log('📚 Count query: Applied status filter:', status);
     }
-    
-    const { count: totalCount } = await countQuery;
-    
+
+    // Apply same filters as main query
+    if (categoryId) {
+      // Ensure categoryId is treated as a string for UUID comparison
+      const categoryIdStr = String(categoryId).trim();
+      countQuery = countQuery.eq('category_id', categoryIdStr);
+      console.log('📚 Count query: Applied category filter:', {
+        original: categoryId,
+        processed: categoryIdStr,
+        type: typeof categoryIdStr,
+      });
+    }
+
+    if (authorId) {
+      countQuery = countQuery.eq('author_id', authorId);
+      console.log('📚 Count query: Applied author filter:', authorId);
+    }
+
+    if (language) {
+      countQuery = countQuery.eq('language', language);
+      console.log('📚 Count query: Applied language filter:', language);
+    }
+
+    if (search) {
+      countQuery = countQuery.textSearch('title', search, {
+        type: 'websearch',
+        config: 'english',
+      });
+      console.log('📚 Count query: Applied search filter:', search);
+    }
+
+    const { count: totalCount, error: countError } = await countQuery;
+
+    if (countError) {
+      console.error('❌ Error getting count:', countError);
+      console.error('Count error details:', {
+        message: countError.message,
+        details: countError.details,
+        hint: countError.hint,
+      });
+    }
+
+    console.log('📚 GET /api/books - Count result:', {
+      totalCount,
+      hasCountError: !!countError,
+      categoryId,
+      status,
+    });
+
     return NextResponse.json({
       books: books || [],
       pagination: {
@@ -100,7 +174,7 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = createServerClient();
     const body = await request.json();
-    
+
     const {
       title,
       author_id,
@@ -117,18 +191,18 @@ export async function POST(request: NextRequest) {
       cover_images,
       published_date,
     } = body;
-    
+
     // Log image data for debugging
     console.log('📸 Image data received:', {
       cover_image_url: cover_image_url ? `${cover_image_url.substring(0, 50)}...` : null,
       cover_images_count: Array.isArray(cover_images) ? cover_images.length : (cover_images ? 1 : 0),
       cover_images_type: typeof cover_images,
       cover_images_is_array: Array.isArray(cover_images),
-      cover_images_preview: Array.isArray(cover_images) 
+      cover_images_preview: Array.isArray(cover_images)
         ? cover_images.map((url: string) => url ? `${url.substring(0, 30)}...` : null).slice(0, 3)
         : cover_images ? `${String(cover_images).substring(0, 30)}...` : null,
     });
-    
+
     // Validate required fields
     if (!title || !author_id || !category_id) {
       return NextResponse.json(
@@ -136,7 +210,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     // Check if author exists, if not create one from user data
     let finalAuthorId = author_id;
     const { data: existingAuthor, error: authorCheckError } = await supabase
@@ -144,7 +218,7 @@ export async function POST(request: NextRequest) {
       .select('id')
       .eq('id', author_id)
       .single();
-    
+
     if (authorCheckError || !existingAuthor) {
       console.log('Author not found, attempting to create from user data...');
       // Author doesn't exist, try to create from user data
@@ -153,7 +227,7 @@ export async function POST(request: NextRequest) {
         .select('id, name, email, mobile, avatar_url')
         .eq('id', author_id)
         .single();
-      
+
       if (userData && !userError) {
         // Create author record from user data
         const { data: newAuthor, error: createAuthorError } = await supabase
@@ -168,7 +242,7 @@ export async function POST(request: NextRequest) {
           })
           .select()
           .single();
-        
+
         if (createAuthorError) {
           console.error('Error creating author:', createAuthorError);
           // If it's a duplicate key error, author might have been created by another request
@@ -178,7 +252,7 @@ export async function POST(request: NextRequest) {
             .select('id')
             .eq('id', author_id)
             .single();
-          
+
           if (!retryAuthor) {
             return NextResponse.json(
               { error: `Failed to create author record: ${createAuthorError.message}` },
@@ -195,27 +269,27 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    
+
     // Validate category exists
     const { data: category, error: categoryError } = await supabase
       .from('categories')
       .select('id, name')
       .eq('id', category_id)
       .single();
-    
+
     if (!category || categoryError) {
       console.error('Category validation error:', categoryError);
       return NextResponse.json(
-        { 
+        {
           error: `Invalid category_id: Category with ID ${category_id} does not exist. Please select a valid category.`,
           details: categoryError?.message || 'Category not found'
         },
         { status: 400 }
       );
     }
-    
+
     console.log('Category validated:', category.name);
-    
+
     // Process cover_images - ensure it's an array
     let processedCoverImages: string[] = [];
     if (cover_images) {
@@ -227,16 +301,16 @@ export async function POST(request: NextRequest) {
         processedCoverImages = [cover_images];
       }
     }
-    
+
     // Use first cover image as cover_image_url if not provided
     const finalCoverImageUrl = cover_image_url || (processedCoverImages.length > 0 ? processedCoverImages[0] : null);
-    
+
     console.log('📸 Processed image data:', {
       cover_image_url: finalCoverImageUrl ? `${finalCoverImageUrl.substring(0, 50)}...` : null,
       cover_images_count: processedCoverImages.length,
       cover_images_preview: processedCoverImages.slice(0, 3).map((url: string) => url ? `${url.substring(0, 30)}...` : null),
     });
-    
+
     // Insert book
     const { data: book, error } = await supabase
       .from('books')
@@ -259,7 +333,7 @@ export async function POST(request: NextRequest) {
       })
       .select()
       .single();
-    
+
     if (error) {
       console.error('Error creating book:', error);
       // Provide more detailed error message
@@ -276,7 +350,7 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    
+
     // Log successful creation with image info
     console.log('✅ Book created successfully:', {
       book_id: book?.id,
@@ -285,7 +359,7 @@ export async function POST(request: NextRequest) {
       cover_images_count: Array.isArray(book?.cover_images) ? book.cover_images.length : 0,
       cover_image_url_preview: book?.cover_image_url ? `${book.cover_image_url.substring(0, 50)}...` : null,
     });
-    
+
     // Update author's books count (ignore errors if RPC doesn't exist)
     try {
       await supabase.rpc('increment_author_books', {
@@ -295,7 +369,7 @@ export async function POST(request: NextRequest) {
       console.warn('Could not increment author books count:', rpcError);
       // Not critical, continue
     }
-    
+
     return NextResponse.json({ book }, { status: 201 });
   } catch (error: any) {
     console.error('Error in POST /api/books:', error);

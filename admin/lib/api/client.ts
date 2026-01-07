@@ -34,7 +34,11 @@ class ApiClient {
       
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(error.error || `HTTP error! status: ${response.status}`);
+        const errorMessage = error.error || error.message || `HTTP error! status: ${response.status}`;
+        const apiError: any = new Error(errorMessage);
+        apiError.status = response.status;
+        apiError.details = error.details;
+        throw apiError;
       }
 
       return await response.json();
@@ -262,10 +266,12 @@ class ApiClient {
     if (folder) {
       formData.append('folder', folder);
     }
+    formData.append('fileName', file.name);
+    formData.append('fileType', file.type || 'application/octet-stream');
 
     const url = `${this.baseUrl}/api/upload`;
     const response = await fetch(url, {
-      method: 'PUT',
+      method: 'POST',
       body: formData,
     });
 
@@ -295,6 +301,99 @@ class ApiClient {
       activeUsers: number;
       authorRevenue: any[];
     }>(`/api/dashboard${query ? `?${query}` : ''}`);
+  }
+
+  // Curriculum API
+  async getCurriculums(params?: { page?: number; limit?: number; state?: string; status?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, value.toString());
+        }
+      });
+    }
+    const query = queryParams.toString();
+    return this.request<{ curriculums: any[]; pagination: any }>(
+      `/api/curriculum${query ? `?${query}` : ''}`
+    );
+  }
+
+  async getCurriculum(id: string) {
+    return this.request<{ curriculum: any }>(`/api/curriculum/${id}`);
+  }
+
+  async createCurriculum(data: any) {
+    return this.request<{ curriculum: any }>('/api/curriculum', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCurriculum(id: string, data: any) {
+    return this.request<{ curriculum: any }>(`/api/curriculum/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCurriculum(id: string) {
+    return this.request<{ success: boolean }>(`/api/curriculum/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Settings API
+  async getSettings() {
+    return this.request<{
+      settings?: {
+        platform_name: string;
+        support_email: string;
+        auto_approve_books: boolean;
+        email_notifications: boolean;
+      };
+      platform_name?: string;
+      support_email?: string;
+      auto_approve_books?: boolean;
+      email_notifications?: boolean;
+    }>('/api/settings');
+  }
+
+  async updateSettings(data: {
+    platform_name?: string;
+    support_email?: string;
+    auto_approve_books?: boolean;
+    email_notifications?: boolean;
+  }) {
+    return this.request<{ settings: any }>('/api/settings', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Profile API
+  async getProfile() {
+    return this.request<{ profile: any }>('/api/profile');
+  }
+
+  async updateProfile(data: {
+    name?: string;
+    email?: string;
+    current_password?: string;
+    new_password?: string;
+  }) {
+    return this.request<{ profile: any }>('/api/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Auth API
+  async login(email: string, password: string) {
+    return this.request<{ success: boolean; user: any; token: string }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
   }
 }
 

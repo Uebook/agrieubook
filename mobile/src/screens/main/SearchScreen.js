@@ -15,12 +15,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Header from '../../components/common/Header';
-import { searchBooks, books, categories } from '../../services/dummyData';
 import { useSettings } from '../../context/SettingsContext';
+import { useCategories } from '../../context/CategoriesContext';
 import apiClient from '../../services/api';
 
 const SearchScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
+  const { categories: categoriesList } = useCategories();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { query: initialQuery } = route.params || {};
@@ -28,10 +29,34 @@ const SearchScreen = ({ route, navigation }) => {
   const [recentSearches, setRecentSearches] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [popularBooks, setPopularBooks] = useState([]);
+  const [loadingPopular, setLoadingPopular] = useState(false);
 
   // Popular suggestions based on categories
   const suggestions = useMemo(() => {
-    return categories.slice(0, 6).map((cat) => cat.name);
+    return (categoriesList || []).slice(0, 6).map((cat) => cat.name);
+  }, [categoriesList]);
+
+  // Fetch popular books from API
+  useEffect(() => {
+    const fetchPopularBooks = async () => {
+      try {
+        setLoadingPopular(true);
+        const response = await apiClient.getBooks({
+          status: 'published',
+          limit: 6,
+          sort: 'popularity',
+        });
+        setPopularBooks(response.books || []);
+      } catch (error) {
+        console.error('Error fetching popular books:', error);
+        setPopularBooks([]);
+      } finally {
+        setLoadingPopular(false);
+      }
+    };
+
+    fetchPopularBooks();
   }, []);
 
   // Fetch search results from API
@@ -51,8 +76,7 @@ const SearchScreen = ({ route, navigation }) => {
         setSearchResults(response.books || []);
       } catch (error) {
         console.error('Error searching books:', error);
-        // Fallback to dummy data
-        setSearchResults(searchBooks(searchQuery));
+        setSearchResults([]);
       } finally {
         setSearchLoading(false);
       }
@@ -65,11 +89,6 @@ const SearchScreen = ({ route, navigation }) => {
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
-
-  // Popular books to show when no search query
-  const popularBooks = useMemo(() => {
-    return books.slice(0, 6);
-  }, []);
 
   // Handle search
   const handleSearch = (query) => {
@@ -365,15 +384,27 @@ const SearchScreen = ({ route, navigation }) => {
           {/* Popular Books */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Popular Books</Text>
-            <FlatList
-              data={popularBooks}
-              renderItem={renderBookItem}
-              keyExtractor={(item) => item.id}
-              numColumns={2}
-              contentContainerStyle={styles.listContent}
-              columnWrapperStyle={styles.row}
-              scrollEnabled={false}
-            />
+            {loadingPopular ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={themeColors.primary.main} />
+              </View>
+            ) : popularBooks.length > 0 ? (
+              <FlatList
+                data={popularBooks}
+                renderItem={renderBookItem}
+                keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+                numColumns={2}
+                contentContainerStyle={styles.listContent}
+                columnWrapperStyle={styles.row}
+                scrollEnabled={false}
+              />
+            ) : (
+              <View style={{ padding: 20 }}>
+                <Text style={{ color: themeColors.text.secondary, textAlign: 'center' }}>
+                  No popular books available
+                </Text>
+              </View>
+            )}
           </View>
         </ScrollView>
       )}

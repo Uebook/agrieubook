@@ -16,7 +16,7 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
-import { books as dummyBooks, sortBooks, filterBooks, categories, authors } from '../../services/dummyData';
+import { useCategories } from '../../context/CategoriesContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
@@ -24,6 +24,7 @@ import apiClient from '../../services/api';
 const BookStoreScreen = ({ navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
   const { userRole, userId } = useAuth();
+  const { categories: categoriesList } = useCategories();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,7 +39,22 @@ const BookStoreScreen = ({ navigation }) => {
     language: null,
   });
   const [allBooks, setAllBooks] = useState([]);
+  const [authors, setAuthors] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Fetch authors from API
+  useEffect(() => {
+    const fetchAuthors = async () => {
+      try {
+        const response = await apiClient.getAuthors({ limit: 100 });
+        setAuthors(response.authors || []);
+      } catch (error) {
+        console.error('Error fetching authors:', error);
+        setAuthors([]);
+      }
+    };
+    fetchAuthors();
+  }, []);
 
   // Fetch books from API
   useEffect(() => {
@@ -57,8 +73,7 @@ const BookStoreScreen = ({ navigation }) => {
         setAllBooks(response.books || []);
       } catch (error) {
         console.error('Error fetching books:', error);
-        // Fallback to dummy data
-        setAllBooks(dummyBooks);
+        setAllBooks([]);
       } finally {
         setLoading(false);
       }
@@ -576,7 +591,7 @@ const BookStoreScreen = ({ navigation }) => {
                       All
                     </Text>
                   </TouchableOpacity>
-                  {categories.map((cat) => (
+                  {(categoriesList || []).map((cat) => (
                     <TouchableOpacity
                       key={cat.id}
                       style={[

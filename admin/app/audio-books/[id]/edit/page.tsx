@@ -1,25 +1,21 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { dummyAudioBooks, dummyAuthors } from '@/lib/dummyData';
+import apiClient from '@/lib/api/client';
 
 export default function AudioBookEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const audioBook = dummyAudioBooks.find(a => a.id === id);
+  const [audioBook, setAudioBook] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [authors, setAuthors] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
 
-  const [formData, setFormData] = useState(audioBook ? {
-    title: audioBook.title,
-    authorId: audioBook.authorId,
-    description: audioBook.description,
-    duration: audioBook.duration,
-    language: audioBook.language,
-    categoryId: audioBook.categoryId,
-    status: audioBook.status,
-  } : {
+  const [formData, setFormData] = useState({
     title: '',
     authorId: '',
     description: '',
@@ -30,19 +26,67 @@ export default function AudioBookEditPage({ params }: { params: Promise<{ id: st
   });
 
   const [coverImages, setCoverImages] = useState<File[]>([]);
-  const [coverImagePreviews, setCoverImagePreviews] = useState<string[]>([audioBook?.cover || ''].filter(Boolean));
+  const [coverImagePreviews, setCoverImagePreviews] = useState<string[]>([]);
   const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [audioPreview, setAudioPreview] = useState<string>(audioBook?.audioUrl || '');
-  const [loading, setLoading] = useState(false);
+  const [audioPreview, setAudioPreview] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  const categories = [
-    { id: '1', name: 'Organic Farming' },
-    { id: '2', name: 'Crop Management' },
-    { id: '3', name: 'Livestock' },
-    { id: '4', name: 'Agricultural Technology' },
-  ];
+  useEffect(() => {
+    fetchAudioBook();
+    fetchAuthors();
+    fetchCategories();
+  }, [id]);
 
-  if (!audioBook) {
+  const fetchAudioBook = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiClient.getAudioBook(id);
+      const book = response.audioBook;
+      setAudioBook(book);
+      setFormData({
+        title: book.title || '',
+        authorId: book.author_id || '',
+        description: book.description || '',
+        duration: book.duration || '',
+        language: book.language || 'English',
+        categoryId: book.category_id || '',
+        status: book.status || 'pending',
+      });
+      if (book.cover_url) {
+        setCoverImagePreviews([book.cover_url]);
+      }
+      if (book.audio_url) {
+        setAudioPreview(book.audio_url);
+      }
+    } catch (err: any) {
+      console.error('Error fetching audio book:', err);
+      setError(err.message || 'Failed to load audio book');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAuthors = async () => {
+    try {
+      const response = await apiClient.getAuthors();
+      setAuthors(response.authors || []);
+    } catch (err) {
+      console.error('Error fetching authors:', err);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await apiClient.getCategories();
+      setCategories(response.categories || []);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
+
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -50,7 +94,25 @@ export default function AudioBookEditPage({ params }: { params: Promise<{ id: st
           <Sidebar />
           <main className="flex-1 p-8">
             <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Audio Book Not Found</h2>
+              <p className="text-gray-500">Loading audio book...</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !audioBook) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="flex">
+          <Sidebar />
+          <main className="flex-1 p-8">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                {error || 'Audio Book Not Found'}
+              </h2>
               <button
                 onClick={() => router.push('/audio-books')}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -88,7 +150,7 @@ export default function AudioBookEditPage({ params }: { params: Promise<{ id: st
   };
 
   const handleCoverImageRemove = (index: number) => {
-    const existingCount = audioBook?.cover ? 1 : 0;
+    const existingCount = audioBook?.cover_url ? 1 : 0;
     if (index < existingCount) {
       // Existing image (from URL) - just remove from preview
       setCoverImagePreviews(coverImagePreviews.filter((_, i) => i !== index));
@@ -110,13 +172,85 @@ export default function AudioBookEditPage({ params }: { params: Promise<{ id: st
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
+    setUploadProgress(0);
 
-    setTimeout(() => {
+    try {
+      // Step 1: Upload new audio file if provided
+      let audioUrl = audioBook.audio_url;
+      if (audioFile) {
+        setUploadProgress(10);
+        const audioFormData = new FormData();
+        audioFormData.append('file', audioFile);
+        audioFormData.append('bucket', 'books');
+        audioFormData.append('folder', 'audio-books/audio');
+        audioFormData.append('fileName', audioFile.name);
+        audioFormData.append('fileType', audioFile.type || 'audio/mpeg');
+        
+        const uploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
+          method: 'POST',
+          body: audioFormData,
+        });
+        
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json();
+          throw new Error(errorData.error || 'Failed to upload audio file');
+        }
+        
+        const audioUploadResult = await uploadResponse.json();
+        audioUrl = audioUploadResult.url || audioUploadResult.path;
+      }
+
+      // Step 2: Upload new cover images if provided
+      setUploadProgress(30);
+      let coverUrl = audioBook.cover_url;
+      if (coverImages.length > 0) {
+        const imageFormData = new FormData();
+        imageFormData.append('file', coverImages[0]);
+        imageFormData.append('bucket', 'books');
+        imageFormData.append('folder', 'audio-books/covers');
+        imageFormData.append('fileName', coverImages[0].name);
+        imageFormData.append('fileType', coverImages[0].type || 'image/jpeg');
+        
+        const coverUploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
+          method: 'POST',
+          body: imageFormData,
+        });
+        
+        if (!coverUploadResponse.ok) {
+          throw new Error('Failed to upload cover image');
+        }
+        
+        const coverResult = await coverUploadResponse.json();
+        coverUrl = coverResult.url || coverResult.path;
+      }
+
+      // Step 3: Update audio book record
+      setUploadProgress(80);
+      const audioBookData = {
+        title: formData.title,
+        author_id: formData.authorId,
+        description: formData.description,
+        duration: formData.duration,
+        language: formData.language,
+        category_id: formData.categoryId,
+        status: formData.status,
+        ...(audioUrl && { audio_url: audioUrl }),
+        ...(coverUrl && { cover_url: coverUrl }),
+      };
+
+      await apiClient.updateAudioBook(id, audioBookData);
+      setUploadProgress(100);
+
       alert('Audio book updated successfully!');
       router.push(`/audio-books/${id}`);
-      setLoading(false);
-    }, 1000);
+    } catch (error: any) {
+      console.error('Error updating audio book:', error);
+      alert(error.message || 'Failed to update audio book');
+    } finally {
+      setSubmitting(false);
+      setUploadProgress(0);
+    }
   };
 
   return (
@@ -163,7 +297,8 @@ export default function AudioBookEditPage({ params }: { params: Promise<{ id: st
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
-                    {dummyAuthors.map(author => (
+                    <option value="">Select Author</option>
+                    {authors.map(author => (
                       <option key={author.id} value={author.id}>{author.name}</option>
                     ))}
                   </select>
@@ -197,6 +332,7 @@ export default function AudioBookEditPage({ params }: { params: Promise<{ id: st
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   >
+                    <option value="">Select Category</option>
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
@@ -264,9 +400,9 @@ export default function AudioBookEditPage({ params }: { params: Promise<{ id: st
                             >
                               ×
                             </button>
-                            {index >= (audioBook?.cover ? 1 : 0) && coverImages[index - (audioBook?.cover ? 1 : 0)] && (
+                            {index >= (audioBook?.cover_url ? 1 : 0) && coverImages[index - (audioBook?.cover_url ? 1 : 0)] && (
                               <p className="text-xs text-gray-500 mt-1 truncate">
-                                {coverImages[index - (audioBook?.cover ? 1 : 0)].name}
+                                {coverImages[index - (audioBook?.cover_url ? 1 : 0)].name}
                               </p>
                             )}
                           </div>
@@ -321,10 +457,10 @@ export default function AudioBookEditPage({ params }: { params: Promise<{ id: st
               <div className="flex space-x-4 pt-4">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={submitting}
                   className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                 >
-                  {loading ? 'Updating...' : 'Update Audio Book'}
+                  {submitting ? 'Updating...' : 'Update Audio Book'}
                 </button>
                 <button
                   type="button"

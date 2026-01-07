@@ -24,12 +24,20 @@ export default function AddAudioBookPage() {
   const [authors, setAuthors] = useState<any[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const categories = [
-    { id: '1', name: 'Organic Farming' },
-    { id: '2', name: 'Crop Management' },
-    { id: '3', name: 'Livestock' },
-    { id: '4', name: 'Agricultural Technology' },
-  ];
+  const [categories, setCategories] = useState<any[]>([]);
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await apiClient.getCategories();
+        setCategories(response.categories || []);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   // Fetch authors on mount
   useEffect(() => {
@@ -94,15 +102,48 @@ export default function AddAudioBookPage() {
     try {
       // Step 1: Upload audio file
       setUploadProgress(10);
-      const audioUploadResult = await apiClient.uploadFile(audioFile, 'audio-books', 'audio');
-      const audioUrl = audioUploadResult.url;
+      const audioFormData = new FormData();
+      audioFormData.append('file', audioFile);
+      audioFormData.append('bucket', 'books'); // Use existing 'books' bucket
+      audioFormData.append('folder', 'audio-books/audio'); // Organize in audio-books subfolder
+      audioFormData.append('fileName', audioFile.name);
+      audioFormData.append('fileType', audioFile.type || 'audio/mpeg');
+      
+      const uploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
+        method: 'POST',
+        body: audioFormData,
+      });
+      
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || 'Failed to upload audio file');
+      }
+      
+      const audioUploadResult = await uploadResponse.json();
+      const audioUrl = audioUploadResult.url || audioUploadResult.path;
 
       // Step 2: Upload cover images
       setUploadProgress(30);
       const coverImageUrls: string[] = [];
       for (let i = 0; i < coverImages.length; i++) {
-        const coverResult = await apiClient.uploadFile(coverImages[i], 'covers', 'audio-books');
-        coverImageUrls.push(coverResult.url);
+        const imageFormData = new FormData();
+        imageFormData.append('file', coverImages[i]);
+        imageFormData.append('bucket', 'books'); // Use existing 'books' bucket
+        imageFormData.append('folder', 'audio-books/covers'); // Organize in audio-books subfolder
+        imageFormData.append('fileName', coverImages[i].name);
+        imageFormData.append('fileType', coverImages[i].type || 'image/jpeg');
+        
+        const coverUploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
+          method: 'POST',
+          body: imageFormData,
+        });
+        
+        if (!coverUploadResponse.ok) {
+          throw new Error('Failed to upload cover image');
+        }
+        
+        const coverResult = await coverUploadResponse.json();
+        coverImageUrls.push(coverResult.url || coverResult.path);
         setUploadProgress(30 + (i + 1) * (50 / coverImages.length));
       }
 
@@ -116,8 +157,7 @@ export default function AddAudioBookPage() {
         language: formData.language,
         category_id: formData.categoryId,
         audio_url: audioUrl,
-        cover_image_url: coverImageUrls[0] || null,
-        cover_images: coverImageUrls,
+        cover_url: coverImageUrls[0] || null,
       };
 
       await apiClient.createAudioBook(audioBookData);
