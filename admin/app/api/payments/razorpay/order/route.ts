@@ -124,7 +124,17 @@ export async function POST(request: NextRequest) {
       if (razorpayError.statusCode === 401 || razorpayError.error?.code === 'BAD_REQUEST_ERROR' || razorpayError.statusCode === 400) {
         const errorMsg = razorpayError.error?.description || razorpayError.description || razorpayError.error?.field || 'Invalid Razorpay credentials';
         const errorCode = razorpayError.error?.code || 'AUTH_ERROR';
-        throw new Error(`Razorpay authentication failed (${errorCode}): ${errorMsg}. Please verify that RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET match and are correct in Vercel environment variables.`);
+        
+        // Provide more helpful error message
+        const helpfulMsg = `Razorpay authentication failed (${errorCode}): ${errorMsg}.\n\n` +
+          `This usually means:\n` +
+          `1. The Key ID and Secret Key don't match\n` +
+          `2. The credentials are incorrect\n` +
+          `3. You're using test keys in production or vice versa\n\n` +
+          `Please verify your credentials at: https://dashboard.razorpay.com/app/keys\n` +
+          `Make sure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are correctly set in Vercel.`;
+        
+        throw new Error(helpfulMsg);
       }
       
       // Check for other common errors
