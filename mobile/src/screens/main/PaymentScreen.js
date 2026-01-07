@@ -2,7 +2,7 @@
  * Payment Screen - Razorpay payment integration
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Header from '../../components/common/Header';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
@@ -24,7 +25,7 @@ const RAZORPAY_KEY_ID = 'rzp_test_S10gAhQQEnKuYr';
 
 const PaymentScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
-  const { userId } = useAuth();
+  const { userId, userData } = useAuth();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { bookId, audioBookId } = route.params || {};
@@ -32,6 +33,8 @@ const PaymentScreen = ({ route, navigation }) => {
   const [book, setBook] = useState(null);
   const [audioBook, setAudioBook] = useState(null);
   const [processing, setProcessing] = useState(false);
+  const [razorpayOpened, setRazorpayOpened] = useState(false);
+  const razorpayTimeoutRef = useRef(null);
 
   // Fetch book or audio book details
   useEffect(() => {
@@ -108,14 +111,14 @@ const PaymentScreen = ({ route, navigation }) => {
           audioBookId,
           userId,
         });
-        
+
         orderResponse = await apiClient.createRazorpayOrder(
           itemPrice,
           bookId,
           audioBookId,
           userId
         );
-        
+
         console.log('✅ Order created successfully:', {
           orderId: orderResponse?.orderId,
           amount: orderResponse?.amount,
@@ -194,6 +197,16 @@ const PaymentScreen = ({ route, navigation }) => {
       // Wrap in try-catch to catch any immediate errors
       RazorpayCheckout.open(razorpayOptions)
         .then(async (data) => {
+          // Clear timeout
+          if (razorpayTimeoutRef.current) {
+            clearTimeout(razorpayTimeoutRef.current);
+            razorpayTimeoutRef.current = null;
+          }
+
+          // Clear pending payment
+          await AsyncStorage.removeItem('pending_razorpay_payment');
+          setRazorpayOpened(false);
+
           // Payment success - Razorpay SDK returns payment data
           console.log('✅ Payment success data:', {
             razorpay_payment_id: data.razorpay_payment_id,
@@ -245,7 +258,19 @@ const PaymentScreen = ({ route, navigation }) => {
             setProcessing(false);
           }
         })
-        .catch((error) => {
+        .catch(async (error) => {
+          // Clear timeout
+          if (razorpayTimeoutRef.current) {
+            clearTimeout(razorpayTimeoutRef.current);
+            razorpayTimeoutRef.current = null;
+          }
+
+          // Clear pending payment on error (unless it's just a cancellation)
+          if (error.code !== 2 && error.description !== 'Payment cancelled') {
+            await AsyncStorage.removeItem('pending_razorpay_payment');
+          }
+          setRazorpayOpened(false);
+
           // Payment failed or user cancelled
           console.error('❌ Razorpay checkout error:', {
             code: error.code,
@@ -269,7 +294,7 @@ const PaymentScreen = ({ route, navigation }) => {
               error.description || 'Invalid payment request. Please try again.',
               [{ text: 'OK' }]
             );
-          } else if (error.description === 'Payment cancelled' || error.code === 'PAYMENT_CANCELLED') {
+          } else if (error.description === 'Payment cancelled' || error.code === 'PAYMENT_CANCELLED' || error.code === 2) {
             // User cancelled - don't show error, just log
             console.log('Payment cancelled by user');
             // Optionally show a message
