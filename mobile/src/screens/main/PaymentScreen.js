@@ -150,39 +150,35 @@ const PaymentScreen = ({ route, navigation }) => {
       }
 
       // Step 2: Open Razorpay Checkout - This opens a native Razorpay screen
-      const razorpayOptions = {
-        description: `Purchase: ${item.title}`,
+      const paymentAmount = orderResponse.amount; // Amount in paise
+      const email = userData?.email || '';
+      
+      const options = {
+        description: 'Order Payment',
         image: item.cover_image_url || item.cover_url || 'https://i.imgur.com/3l7C2Jn.png',
         currency: 'INR',
         key: orderResponse.key || RAZORPAY_KEY_ID,
-        amount: orderResponse.amount, // Amount in paise (already in paise from API)
-        name: 'Agribook',
+        amount: paymentAmount,
+        name: 'Agriebook',
         order_id: orderResponse.orderId,
         prefill: {
-          email: '', // You can prefill user email if available
-          contact: '', // You can prefill user contact if available
-          name: '', // You can prefill user name if available
+          email: email || userData?.email || 'customer@example.com',
+          contact: userData?.phone || userData?.mobile || '9999999999',
+          name: userData?.name || 'Customer',
         },
-        theme: {
-          color: themeColors.primary.main || '#10B981',
-        },
+        theme: { color: themeColors.primary.main || '#00A86B' },
+        // Add timeout for payment
+        timeout: 600, // 10 minutes in seconds
         notes: {
           bookId: bookId || '',
           audioBookId: audioBookId || '',
           userId: userId || '',
         },
-        // Modal options for better UX
-        modal: {
-          ondismiss: () => {
-            console.log('Razorpay checkout dismissed by user');
-            setProcessing(false);
-          },
-        },
       };
 
       console.log('💳 Opening Razorpay native checkout screen with options:', {
-        ...razorpayOptions,
-        key: razorpayOptions.key.substring(0, 15) + '...', // Don't log full key
+        ...options,
+        key: options.key.substring(0, 15) + '...', // Don't log full key
       });
 
       // Check if RazorpayCheckout is available
@@ -193,9 +189,36 @@ const PaymentScreen = ({ route, navigation }) => {
       console.log('✅ RazorpayCheckout is available, opening checkout...');
       console.log('📱 Platform:', Platform.OS);
 
+      // Mark payment as pending
+      await AsyncStorage.setItem('pending_razorpay_payment', JSON.stringify({
+        orderId: orderResponse.orderId,
+        bookId,
+        audioBookId,
+        userId,
+        amount: itemPrice,
+        timestamp: Date.now(),
+      }));
+      setRazorpayOpened(true);
+
+      // Set timeout for payment (10 minutes)
+      razorpayTimeoutRef.current = setTimeout(async () => {
+        const stillPending = await AsyncStorage.getItem('pending_razorpay_payment');
+        if (stillPending) {
+          // Payment still pending after timeout
+          setRazorpayOpened(false);
+          Alert.alert(
+            'Payment Status',
+            'Your payment is being processed. If you completed the payment, your booking will be created. Please check your orders.',
+            [
+              { text: 'Check Orders', onPress: () => navigation.navigate('Library') },
+              { text: 'OK' }
+            ]
+          );
+        }
+      }, 10 * 60 * 1000); // 10 minutes
+
       // Open Razorpay Checkout - This will open a native full-screen payment UI
-      // Wrap in try-catch to catch any immediate errors
-      RazorpayCheckout.open(razorpayOptions)
+      RazorpayCheckout.open(options)
         .then(async (data) => {
           // Clear timeout
           if (razorpayTimeoutRef.current) {
