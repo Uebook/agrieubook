@@ -23,8 +23,17 @@ export async function OPTIONS(request: NextRequest) {
 // Initialize Razorpay - must be done inside the function to access runtime environment variables
 // In Vercel, environment variables are available at runtime, not at module load time
 function getRazorpayInstance() {
-  const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_S10srfDgCfFXIL';
-  const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'wKdMJW6om9TdsV2XwWQyzcdh';
+  // Get from environment variables first, then fallback to default test keys
+  const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_S10srfDgCfFXIL';
+  const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || process.env.NEXT_PUBLIC_RAZORPAY_KEY_SECRET || 'wKdMJW6om9TdsV2XwWQyzcdh';
+
+  console.log('🔑 Creating Razorpay instance:', {
+    keyIdSet: !!process.env.RAZORPAY_KEY_ID,
+    keyId: RAZORPAY_KEY_ID.substring(0, 15) + '...',
+    secretSet: !!process.env.RAZORPAY_KEY_SECRET,
+    secretLength: RAZORPAY_KEY_SECRET?.length || 0,
+    usingEnvVars: !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET),
+  });
 
   // Check if secret key is still placeholder
   if (RAZORPAY_KEY_SECRET === 'YOUR_RAZORPAY_TEST_SECRET_KEY' || !RAZORPAY_KEY_SECRET) {
