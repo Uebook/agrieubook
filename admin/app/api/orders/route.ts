@@ -19,9 +19,9 @@ export async function GET(request: NextRequest) {
     const supabase = createServerClient();
     const offset = (page - 1) * limit;
 
-    // Get user purchases with book details
-    const { data: purchases, error: purchasesError } = await supabase
-      .from('user_purchases')
+    // Get user purchases from payments table (where purchases are actually stored)
+    const { data: payments, error: paymentsError } = await supabase
+      .from('payments')
       .select(`
         *,
         book:books(
@@ -29,61 +29,73 @@ export async function GET(request: NextRequest) {
           title,
           cover_image_url,
           author:authors(id, name),
-          price
+          price,
+          is_free
         ),
-        payment:payments(
+        audio_book:audio_books(
           id,
-          payment_method,
-          transaction_id,
-          status,
-          created_at
+          title,
+          cover_url,
+          author:authors(id, name),
+          price,
+          is_free
         )
       `)
       .eq('user_id', userId)
-      .order('purchased_at', { ascending: false })
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (purchasesError) {
-      console.error('Error fetching purchases:', purchasesError);
+    if (paymentsError) {
+      console.error('Error fetching purchases:', paymentsError);
       return NextResponse.json(
-        { error: 'Failed to fetch orders' },
+        { error: 'Failed to fetch orders', details: paymentsError.message },
         { status: 500 }
       );
     }
 
     // Get total count
     const { count, error: countError } = await supabase
-      .from('user_purchases')
+      .from('payments')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .eq('status', 'completed');
 
     if (countError) {
       console.error('Error counting purchases:', countError);
     }
 
-    // Format response
-    const orders = purchases?.map((purchase) => ({
-      id: purchase.id,
-      orderNumber: `ORD-${purchase.id.substring(0, 8).toUpperCase()}`,
-      date: purchase.purchased_at,
-      status: purchase.payment?.status || 'completed',
-      total: parseFloat(purchase.amount.toString()),
-      paymentMethod: purchase.payment?.payment_method || 'UPI',
-      books: purchase.book
-        ? [
-            {
-              id: purchase.book.id,
-              title: purchase.book.title,
-              cover: purchase.book.cover_image_url,
-              author: {
-                name: purchase.book.author?.name || 'Unknown',
+    // Format response - handle both books and audio books
+    const orders = payments?.map((payment) => {
+      const item = payment.book || payment.audio_book;
+      const itemType = payment.book ? 'book' : 'audio_book';
+      
+      return {
+        id: payment.id,
+        orderNumber: `ORD-${payment.id.substring(0, 8).toUpperCase()}`,
+        date: payment.created_at,
+        status: payment.status || 'completed',
+        total: parseFloat(payment.amount?.toString() || '0'),
+        paymentMethod: payment.payment_method || 'razorpay',
+        books: item
+          ? [
+              {
+                id: item.id,
+                title: item.title,
+                cover: item.cover_image_url || item.cover_url,
+                cover_image_url: item.cover_image_url || item.cover_url,
+                author: {
+                  id: item.author?.id,
+                  name: item.author?.name || 'Unknown',
+                },
+                price: parseFloat(item.price?.toString() || '0'),
+                isFree: item.is_free || parseFloat(item.price?.toString() || '0') === 0,
+                type: itemType,
               },
-              price: parseFloat(purchase.book.price?.toString() || '0'),
-              isFree: parseFloat(purchase.book.price?.toString() || '0') === 0,
-            },
-          ]
-        : [],
-    })) || [];
+            ]
+          : [],
+      };
+    }) || [];
 
     return NextResponse.json({
       orders,
