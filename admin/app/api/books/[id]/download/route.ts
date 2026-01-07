@@ -25,15 +25,62 @@ export async function GET(
     }
     
     // Extract file path from URL
-    // Supabase Storage URL format: https://project.supabase.co/storage/v1/object/public/bucket/file.pdf
-    const urlParts = book.pdf_url.split('/');
-    const bucket = urlParts[urlParts.length - 2];
-    const fileName = urlParts[urlParts.length - 1];
+    // Supabase Storage URL formats:
+    // 1. Public: https://project.supabase.co/storage/v1/object/public/bucket/path/file.pdf
+    // 2. Signed: https://project.supabase.co/storage/v1/object/sign/bucket/path/file.pdf?token=...
+    // 3. Direct: https://project.supabase.co/storage/v1/object/public/bucket/file.pdf
     
-    // Generate signed URL (expires in 1 hour)
+    let filePath = '';
+    let bucket = 'books'; // Default bucket
+    
+    // Parse the URL to extract bucket and file path
+    const urlObj = new URL(book.pdf_url);
+    const pathParts = urlObj.pathname.split('/');
+    
+    // Find the bucket name (usually after /storage/v1/object/public/ or /storage/v1/object/sign/)
+    const objectIndex = pathParts.indexOf('object');
+    if (objectIndex !== -1 && pathParts[objectIndex + 1]) {
+      // Skip 'public' or 'sign' and get bucket
+      const bucketIndex = objectIndex + 2;
+      if (pathParts[bucketIndex]) {
+        bucket = pathParts[bucketIndex];
+        // Get the file path (everything after bucket)
+        filePath = pathParts.slice(bucketIndex + 1).join('/');
+      }
+    }
+    
+    // If filePath is empty, try to extract from the end
+    if (!filePath) {
+      // Fallback: try to get from the last parts
+      const lastParts = pathParts.slice(-2);
+      if (lastParts.length === 2) {
+        bucket = lastParts[0];
+        filePath = lastParts[1];
+      } else if (lastParts.length === 1) {
+        filePath = lastParts[0];
+      }
+    }
+    
+    // Decode URL encoding in file path
+    filePath = decodeURIComponent(filePath);
+    
+    console.log('📄 PDF URL parsing:', {
+      originalUrl: book.pdf_url,
+      bucket,
+      filePath,
+    });
+    
+    if (!filePath) {
+      return NextResponse.json(
+        { error: 'Could not extract file path from PDF URL' },
+        { status: 400 }
+      );
+    }
+    
+    // Generate signed URL (expires in 24 hours for better UX)
     const { data: signedUrl, error: urlError } = await supabase.storage
       .from(bucket)
-      .createSignedUrl(fileName, 3600); // 1 hour expiry
+      .createSignedUrl(filePath, 86400); // 24 hours expiry
     
     if (urlError || !signedUrl) {
       console.error('Error generating signed URL:', urlError);

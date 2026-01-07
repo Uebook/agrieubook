@@ -691,9 +691,18 @@ These practices have revolutionized the agricultural industry, making it more ef
       {/* Reader Content - Show PDF if purchased, otherwise show sample */}
       {isPurchased && pdfUrl ? (
         <WebView
-          source={{ uri: pdfUrl }}
+          source={{ 
+            uri: pdfUrl,
+            headers: {
+              'Accept': 'application/pdf',
+            },
+          }}
           style={styles.readerContent}
           startInLoadingState={true}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
           renderLoading={() => (
             <View style={[styles.loadingContainer, { backgroundColor: currentTheme.background }]}>
               <ActivityIndicator size="large" color={themeColors.primary.main} />
@@ -705,7 +714,45 @@ These practices have revolutionized the agricultural industry, making it more ef
           onError={(syntheticEvent) => {
             const { nativeEvent } = syntheticEvent;
             console.error('WebView error: ', nativeEvent);
-            Alert.alert('Error', 'Failed to load PDF. Please try again.');
+            console.error('Failed PDF URL: ', pdfUrl);
+            Alert.alert(
+              'Error', 
+              'Failed to load PDF. The link may have expired. Please try again.',
+              [
+                {
+                  text: 'Retry',
+                  onPress: () => {
+                    // Retry fetching PDF
+                    const fetchPdf = async () => {
+                      try {
+                        setLoadingPdf(true);
+                        const downloadResponse = await apiClient.getBookDownloadUrl(bookId);
+                        if (downloadResponse.downloadUrl) {
+                          setPdfUrl(downloadResponse.downloadUrl);
+                        }
+                      } catch (error) {
+                        console.error('Error retrying PDF fetch:', error);
+                      } finally {
+                        setLoadingPdf(false);
+                      }
+                    };
+                    fetchPdf();
+                  },
+                },
+                { text: 'OK' },
+              ]
+            );
+          }}
+          onHttpError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            console.error('WebView HTTP error: ', nativeEvent);
+            if (nativeEvent.statusCode === 401 || nativeEvent.statusCode === 403) {
+              Alert.alert(
+                'Authentication Error',
+                'PDF access expired. Please close and reopen the book.',
+                [{ text: 'OK', onPress: () => navigation.goBack() }]
+              );
+            }
           }}
         />
       ) : (
