@@ -14,12 +14,34 @@ The Razorpay integration is configured with test keys. To use it:
 
 ### 2. Configure Environment Variables
 
+#### For Local Development:
+
 Add these to your `.env.local` file in the `admin` directory:
 
 ```env
 RAZORPAY_KEY_ID=rzp_test_YOUR_KEY_ID
 RAZORPAY_KEY_SECRET=YOUR_SECRET_KEY
 ```
+
+#### For Vercel Deployment (IMPORTANT):
+
+1. Go to your Vercel Dashboard: https://vercel.com/abhisheks-projects-19c6e9a3/admin/settings/environment-variables
+2. Click "Add New" for each variable:
+   - **Key**: `RAZORPAY_KEY_ID`
+     **Value**: `rzp_test_YOUR_KEY_ID` (your actual test key ID)
+     **Environment**: Production, Preview, Development (select all)
+   
+   - **Key**: `RAZORPAY_KEY_SECRET`
+     **Value**: `YOUR_SECRET_KEY` (your actual test secret key)
+     **Environment**: Production, Preview, Development (select all)
+
+3. **After adding variables, redeploy**:
+   ```bash
+   cd admin
+   vercel --prod
+   ```
+
+⚠️ **Note**: Environment variables are only loaded during build/deployment. You must redeploy after adding them!
 
 ### 3. Default Test Keys (for testing)
 

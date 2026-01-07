@@ -23,9 +23,17 @@ export async function OPTIONS(request: NextRequest) {
 // Initialize Razorpay with test keys
 // Get keys from environment variables or use test keys
 // For production, set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'YOUR_RAZORPAY_TEST_SECRET_KEY';
+
+// Check if secret key is still placeholder
+if (RAZORPAY_KEY_SECRET === 'YOUR_RAZORPAY_TEST_SECRET_KEY' || !RAZORPAY_KEY_SECRET) {
+  console.warn('⚠️ WARNING: Razorpay secret key not configured. Using placeholder. Please set RAZORPAY_KEY_SECRET in environment variables.');
+}
+
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag', // Test key ID
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'YOUR_RAZORPAY_TEST_SECRET_KEY', // Test secret key - REPLACE WITH ACTUAL
+  key_id: RAZORPAY_KEY_ID,
+  key_secret: RAZORPAY_KEY_SECRET,
 });
 
 // Note: Replace 'YOUR_RAZORPAY_TEST_SECRET_KEY' with your actual Razorpay test secret key
@@ -86,10 +94,23 @@ export async function POST(request: NextRequest) {
       });
     } catch (razorpayError: any) {
       console.error('❌ Razorpay API error:', razorpayError);
-      // Check if it's an authentication error
-      if (razorpayError.statusCode === 401 || razorpayError.error?.code === 'BAD_REQUEST_ERROR') {
-        throw new Error('Invalid Razorpay credentials. Please configure RAZORPAY_KEY_SECRET in environment variables.');
+      
+      // Check if secret key is placeholder
+      if (RAZORPAY_KEY_SECRET === 'YOUR_RAZORPAY_TEST_SECRET_KEY' || !RAZORPAY_KEY_SECRET) {
+        throw new Error('Razorpay secret key not configured. Please set RAZORPAY_KEY_SECRET in Vercel environment variables. See admin/RAZORPAY_SETUP.md for instructions.');
       }
+      
+      // Check if it's an authentication error
+      if (razorpayError.statusCode === 401 || razorpayError.error?.code === 'BAD_REQUEST_ERROR' || razorpayError.statusCode === 400) {
+        const errorMsg = razorpayError.error?.description || razorpayError.description || 'Invalid Razorpay credentials';
+        throw new Error(`Razorpay authentication failed: ${errorMsg}. Please verify RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables.`);
+      }
+      
+      // Check for other common errors
+      if (razorpayError.error?.code === 'INVALID_REQUEST_ERROR') {
+        throw new Error(`Invalid Razorpay request: ${razorpayError.error?.description || 'Please check your request parameters'}`);
+      }
+      
       throw razorpayError;
     }
 
@@ -115,13 +136,24 @@ export async function POST(request: NextRequest) {
       description: error.description,
     });
     
+    // Determine appropriate status code
+    let statusCode = 500;
+    if (error.message?.includes('not configured') || error.message?.includes('environment variables')) {
+      statusCode = 503; // Service Unavailable - configuration issue
+    } else if (error.statusCode === 401 || error.statusCode === 400) {
+      statusCode = 400; // Bad Request - invalid credentials
+    }
+    
     const errorResponse = NextResponse.json(
       { 
         error: 'Failed to create payment order',
         details: error.message || error.description || 'Unknown error',
         code: error.statusCode || error.code,
+        hint: error.message?.includes('not configured') 
+          ? 'Please configure RAZORPAY_KEY_SECRET in Vercel Dashboard → Settings → Environment Variables'
+          : undefined,
       },
-      { status: 500 }
+      { status: statusCode }
     );
     
     // Add CORS headers to error response
