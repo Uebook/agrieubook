@@ -95,98 +95,25 @@ const PaymentScreen = ({ route, navigation }) => {
     try {
       setProcessing(true);
 
-      console.log('💳 Initiating payment:', {
+      console.log('💳 Initiating payment directly with Razorpay:', {
         amount: itemPrice,
         bookId,
         audioBookId,
         userId,
       });
 
-      // Step 1: Create Razorpay order
-      let orderResponse;
-      try {
-        console.log('📦 Creating Razorpay order with:', {
-          amount: itemPrice,
-          bookId,
-          audioBookId,
-          userId,
-        });
-
-        orderResponse = await apiClient.createRazorpayOrder(
-          itemPrice,
-          bookId,
-          audioBookId,
-          userId
-        );
-
-        console.log('✅ Order created successfully:', {
-          orderId: orderResponse?.orderId,
-          amount: orderResponse?.amount,
-          key: orderResponse?.key ? orderResponse.key.substring(0, 15) + '...' : 'missing',
-        });
-      } catch (orderError) {
-        console.error('❌ Order creation error:', {
-          message: orderError.message,
-          status: orderError.status,
-          details: orderError.details,
-          error: orderError,
-        });
-
-        // Show detailed error to user
-        const errorMessage = orderError.message || orderError.details || 'Failed to create payment order';
-        Alert.alert(
-          'Payment Error',
-          errorMessage + '\n\nPlease check your internet connection and try again.',
-          [{ text: 'OK' }]
-        );
-        setProcessing(false);
-        return; // Stop here if order creation fails
-      }
-
-      if (!orderResponse || !orderResponse.orderId) {
-        console.error('❌ Invalid order response:', orderResponse);
-        Alert.alert(
-          'Payment Error',
-          'Invalid response from payment server. Please try again.',
-          [{ text: 'OK' }]
-        );
-        setProcessing(false);
-        return;
-      }
-
-      // Validate required fields
-      if (!orderResponse.amount || orderResponse.amount <= 0) {
-        Alert.alert(
-          'Payment Error',
-          'Invalid payment amount. Please try again.',
-          [{ text: 'OK' }]
-        );
-        setProcessing(false);
-        return;
-      }
-
-      if (!orderResponse.key && !RAZORPAY_KEY_ID) {
-        Alert.alert(
-          'Payment Error',
-          'Payment gateway configuration error. Please contact support.',
-          [{ text: 'OK' }]
-        );
-        setProcessing(false);
-        return;
-      }
-
-      // Step 2: Open Razorpay Checkout - This opens a native Razorpay screen
-      const paymentAmount = orderResponse.amount; // Amount in paise
+      // Open Razorpay Checkout directly - No order creation API call needed
+      // Razorpay will create the order internally
+      const paymentAmount = Math.round(itemPrice * 100); // Convert to paise
       const email = userData?.email || '';
-
+      
       const options = {
         description: 'Order Payment',
         image: item.cover_image_url || item.cover_url || 'https://i.imgur.com/3l7C2Jn.png',
         currency: 'INR',
-        key: orderResponse.key || RAZORPAY_KEY_ID,
-        amount: paymentAmount,
+        key: RAZORPAY_KEY_ID,
+        amount: paymentAmount, // Amount in paise
         name: 'Agriebook',
-        order_id: orderResponse.orderId,
         prefill: {
           email: email || userData?.email || 'customer@example.com',
           contact: userData?.phone || userData?.mobile || '9999999999',
@@ -277,17 +204,20 @@ const PaymentScreen = ({ route, navigation }) => {
 
             setProcessing(true); // Keep loading while verifying
 
-            try {
-              // Verify payment with backend
-              const verifyResponse = await apiClient.verifyRazorpayPayment(
-                data.razorpay_order_id,
-                data.razorpay_payment_id,
-                data.razorpay_signature,
-                userId,
-                bookId,
-                audioBookId,
-                itemPrice
-              );
+          try {
+            // Verify payment with backend
+            // Note: razorpay_order_id might not be present if order was created by Razorpay
+            const orderId = data.razorpay_order_id || data.order_id || 'direct_payment';
+            
+            const verifyResponse = await apiClient.verifyRazorpayPayment(
+              orderId,
+              data.razorpay_payment_id,
+              data.razorpay_signature,
+              userId,
+              bookId,
+              audioBookId,
+              itemPrice
+            );
 
               console.log('✅ Payment verification response:', verifyResponse);
 
