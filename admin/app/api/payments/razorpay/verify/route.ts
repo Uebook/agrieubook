@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       amount,
     } = body;
 
-    // For direct payments, order_id might not be present
+    // For direct payments, order_id and signature might not be present
     // Razorpay creates the order internally when opening checkout directly
     console.log('🔍 Verification request received:', {
       hasOrderId: !!razorpay_order_id,
@@ -45,15 +45,17 @@ export async function POST(request: NextRequest) {
       userId: userId || 'null',
     });
 
-    if (!razorpay_payment_id || !razorpay_signature) {
-      console.error('❌ Missing required fields:', {
-        paymentId: !!razorpay_payment_id,
-        signature: !!razorpay_signature,
-      });
+    if (!razorpay_payment_id) {
+      console.error('❌ Missing required field: payment_id');
       return NextResponse.json(
-        { error: 'Missing payment verification data (payment_id and signature are required)' },
+        { error: 'Missing payment ID (payment_id is required)' },
         { status: 400 }
       );
+    }
+
+    // Signature is optional - we can verify via Razorpay API if missing
+    if (!razorpay_signature) {
+      console.warn('⚠️ Payment signature not provided, will verify via Razorpay API');
     }
 
     // If order_id is not provided, we need to fetch it from Razorpay using payment_id
@@ -88,16 +90,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify payment signature
+    // Verify payment - Use Razorpay API verification (more reliable for direct payments)
     // Get secret key from environment variables
     const keySecret = process.env.RAZORPAY_KEY_SECRET || 'wKdMJW6om9TdsV2XwWQyzcdh';
     
-    // Razorpay signature is always: HMAC_SHA256(order_id|payment_id, secret_key)
-    // Even for direct payments, Razorpay creates an order internally and returns order_id
     let signatureVerified = false;
+    let verifiedOrderId = orderId;
     
-    if (orderId && orderId !== `direct_${razorpay_payment_id}`) {
-      // Standard verification with order_id
+    // First, try signature verification if signature is provided
+    if (razorpay_signature && orderId && orderId !== `direct_${razorpay_payment_id}`) {
       const signatureText = `${orderId}|${razorpay_payment_id}`;
       const generatedSignature = crypto
         .createHmac('sha256', keySecret)
@@ -108,15 +109,13 @@ export async function POST(request: NextRequest) {
         signatureVerified = true;
         console.log('✅ Signature verified with order_id');
       } else {
-        console.error('❌ Signature verification failed with order_id');
-        console.error('Expected:', generatedSignature.substring(0, 20) + '...');
-        console.error('Received:', razorpay_signature.substring(0, 20) + '...');
+        console.warn('⚠️ Signature verification failed, will verify via Razorpay API');
       }
     }
     
-    // If verification failed and we don't have order_id, try to verify using Razorpay API
-    if (!signatureVerified) {
-      console.log('⚠️ Attempting alternative verification method...');
+    // Always verify via Razorpay API (more reliable, especially for direct payments)
+    if (!signatureVerified || !razorpay_signature) {
+      console.log('🔍 Verifying payment via Razorpay API...');
       try {
         const Razorpay = require('razorpay');
         const razorpay = new Razorpay({
@@ -124,32 +123,51 @@ export async function POST(request: NextRequest) {
           key_secret: keySecret,
         });
         
-        // Verify payment using Razorpay API
+        // Fetch payment details from Razorpay
         const payment = await razorpay.payments.fetch(razorpay_payment_id);
         
+        console.log('📦 Payment details from Razorpay:', {
+          id: payment.id,
+          status: payment.status,
+          order_id: payment.order_id,
+          amount: payment.amount,
+          currency: payment.currency,
+        });
+        
+        // Verify payment status
         if (payment.status === 'authorized' || payment.status === 'captured') {
-          // Payment is valid according to Razorpay
           signatureVerified = true;
-          orderId = payment.order_id || orderId;
-          console.log('✅ Payment verified via Razorpay API, order_id:', orderId);
+          verifiedOrderId = payment.order_id || orderId;
+          console.log('✅ Payment verified via Razorpay API');
+          console.log('✅ Order ID from Razorpay:', verifiedOrderId);
         } else {
           console.error('❌ Payment status is not valid:', payment.status);
+          return NextResponse.json(
+            { error: `Payment status is ${payment.status}, expected 'authorized' or 'captured'` },
+            { status: 400 }
+          );
         }
       } catch (verifyError: any) {
-        console.error('❌ Alternative verification failed:', verifyError.message);
-        // For now, we'll skip signature verification for direct payments
-        // This is less secure but allows the payment to go through
-        console.warn('⚠️ Skipping signature verification for direct payment');
-        signatureVerified = true; // Allow payment to proceed
+        console.error('❌ Razorpay API verification failed:', verifyError.message);
+        return NextResponse.json(
+          { 
+            error: 'Failed to verify payment with Razorpay',
+            details: verifyError.message || 'Unknown error'
+          },
+          { status: 500 }
+        );
       }
     }
 
     if (!signatureVerified) {
       return NextResponse.json(
-        { error: 'Payment signature verification failed' },
+        { error: 'Payment verification failed' },
         { status: 400 }
       );
     }
+    
+    // Use the verified order_id
+    orderId = verifiedOrderId;
 
     console.log('✅ Payment signature verified successfully');
 
@@ -164,13 +182,13 @@ export async function POST(request: NextRequest) {
       created_at: new Date().toISOString(),
     };
 
-    // Add razorpay_order_id to payment data (if available)
-    // For direct payments, this might be null or a generated ID
-    if (razorpay_order_id && razorpay_order_id !== `direct_${razorpay_payment_id}`) {
-      paymentData.razorpay_order_id = razorpay_order_id;
-    } else {
-      // Store payment_id as reference for direct payments
+    // Add razorpay_order_id to payment data
+    // Use the verified order_id from Razorpay API
+    if (orderId && orderId !== `direct_${razorpay_payment_id}`) {
       paymentData.razorpay_order_id = orderId;
+    } else {
+      // Fallback: use payment_id as reference
+      paymentData.razorpay_order_id = `direct_${razorpay_payment_id}`;
     }
 
     if (bookId) {

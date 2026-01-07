@@ -195,48 +195,50 @@ const PaymentScreen = ({ route, navigation }) => {
             await AsyncStorage.removeItem('pending_razorpay_payment');
             setRazorpayOpened(false);
 
-          // Payment success - Razorpay SDK returns payment data
-          console.log('✅ Payment success data (full):', JSON.stringify(data, null, 2));
-          console.log('✅ Payment success data (summary):', {
-            razorpay_payment_id: data.razorpay_payment_id,
-            razorpay_order_id: data.razorpay_order_id,
-            razorpay_signature: data.razorpay_signature ? 'present' : 'missing',
-            hasOrderId: !!data.razorpay_order_id,
-            hasPaymentId: !!data.razorpay_payment_id,
-            hasSignature: !!data.razorpay_signature,
-          });
+            // Payment success - Razorpay SDK returns payment data
+            console.log('✅ Payment success data (full):', JSON.stringify(data, null, 2));
+            console.log('✅ Payment success data (summary):', {
+              razorpay_payment_id: data.razorpay_payment_id,
+              razorpay_order_id: data.razorpay_order_id,
+              razorpay_signature: data.razorpay_signature ? 'present' : 'missing',
+              hasOrderId: !!data.razorpay_order_id,
+              hasPaymentId: !!data.razorpay_payment_id,
+              hasSignature: !!data.razorpay_signature,
+            });
 
           // Validate required data
           if (!data.razorpay_payment_id) {
             throw new Error('Payment ID is missing from Razorpay response');
           }
 
+          // Note: Signature might not be present in direct payment responses
+          // We'll verify using Razorpay API instead if signature is missing
           if (!data.razorpay_signature) {
-            throw new Error('Payment signature is missing from Razorpay response');
+            console.warn('⚠️ Payment signature not in response, will verify via Razorpay API');
           }
 
-          setProcessing(true); // Keep loading while verifying
+            setProcessing(true); // Keep loading while verifying
 
-          try {
-            // Verify payment with backend
-            // Note: razorpay_order_id might not be present if order was created by Razorpay internally
-            // Razorpay always returns order_id in the response, check all possible fields
-            const orderId = data.razorpay_order_id || data.order_id || data.razorpay_orderId || null;
+            try {
+              // Verify payment with backend
+              // Note: razorpay_order_id might not be present if order was created by Razorpay internally
+              // Razorpay always returns order_id in the response, check all possible fields
+              const orderId = data.razorpay_order_id || data.order_id || data.razorpay_orderId || null;
 
-            console.log('📤 Sending verification request:', {
-              orderId: orderId || 'null (will use payment_id)',
-              paymentId: data.razorpay_payment_id,
-              hasSignature: !!data.razorpay_signature,
-              userId,
-              bookId,
-              audioBookId,
-              amount: itemPrice,
-            });
+              console.log('📤 Sending verification request:', {
+                orderId: orderId || 'null (will use payment_id)',
+                paymentId: data.razorpay_payment_id,
+                hasSignature: !!data.razorpay_signature,
+                userId,
+                bookId,
+                audioBookId,
+                amount: itemPrice,
+              });
 
             const verifyResponse = await apiClient.verifyRazorpayPayment(
               orderId, // Can be null for direct payments
               data.razorpay_payment_id,
-              data.razorpay_signature,
+              data.razorpay_signature || null, // Can be null, will verify via API
               userId,
               bookId,
               audioBookId,
