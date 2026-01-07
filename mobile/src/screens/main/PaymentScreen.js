@@ -131,28 +131,54 @@ const PaymentScreen = ({ route, navigation }) => {
           details: orderError.details,
           error: orderError,
         });
+        
+        // Show detailed error to user
         const errorMessage = orderError.message || orderError.details || 'Failed to create payment order';
-        throw new Error(`Payment initiation error: ${errorMessage}`);
+        Alert.alert(
+          'Payment Error',
+          errorMessage + '\n\nPlease check your internet connection and try again.',
+          [{ text: 'OK' }]
+        );
+        setProcessing(false);
+        return; // Stop here if order creation fails
       }
 
       if (!orderResponse || !orderResponse.orderId) {
         console.error('❌ Invalid order response:', orderResponse);
-        throw new Error('Invalid order response: orderId is missing');
+        Alert.alert(
+          'Payment Error',
+          'Invalid response from payment server. Please try again.',
+          [{ text: 'OK' }]
+        );
+        setProcessing(false);
+        return;
       }
 
       // Validate required fields
       if (!orderResponse.amount || orderResponse.amount <= 0) {
-        throw new Error('Invalid order amount');
+        Alert.alert(
+          'Payment Error',
+          'Invalid payment amount. Please try again.',
+          [{ text: 'OK' }]
+        );
+        setProcessing(false);
+        return;
       }
 
       if (!orderResponse.key && !RAZORPAY_KEY_ID) {
-        throw new Error('Razorpay key is missing');
+        Alert.alert(
+          'Payment Error',
+          'Payment gateway configuration error. Please contact support.',
+          [{ text: 'OK' }]
+        );
+        setProcessing(false);
+        return;
       }
 
       // Step 2: Open Razorpay Checkout - This opens a native Razorpay screen
       const paymentAmount = orderResponse.amount; // Amount in paise
       const email = userData?.email || '';
-      
+
       const options = {
         description: 'Order Payment',
         image: item.cover_image_url || item.cover_url || 'https://i.imgur.com/3l7C2Jn.png',
@@ -188,17 +214,26 @@ const PaymentScreen = ({ route, navigation }) => {
 
       console.log('✅ RazorpayCheckout is available, opening checkout...');
       console.log('📱 Platform:', Platform.OS);
+      console.log('📋 Options:', JSON.stringify({
+        ...options,
+        key: options.key.substring(0, 15) + '...',
+      }, null, 2));
 
       // Mark payment as pending
-      await AsyncStorage.setItem('pending_razorpay_payment', JSON.stringify({
-        orderId: orderResponse.orderId,
-        bookId,
-        audioBookId,
-        userId,
-        amount: itemPrice,
-        timestamp: Date.now(),
-      }));
-      setRazorpayOpened(true);
+      try {
+        await AsyncStorage.setItem('pending_razorpay_payment', JSON.stringify({
+          orderId: orderResponse.orderId,
+          bookId,
+          audioBookId,
+          userId,
+          amount: itemPrice,
+          timestamp: Date.now(),
+        }));
+        setRazorpayOpened(true);
+      } catch (storageError) {
+        console.warn('⚠️ Failed to save pending payment:', storageError);
+        // Continue anyway
+      }
 
       // Set timeout for payment (10 minutes)
       razorpayTimeoutRef.current = setTimeout(async () => {
@@ -218,7 +253,10 @@ const PaymentScreen = ({ route, navigation }) => {
       }, 10 * 60 * 1000); // 10 minutes
 
       // Open Razorpay Checkout - This will open a native full-screen payment UI
-      RazorpayCheckout.open(options)
+      console.log('🚀 Calling RazorpayCheckout.open()...');
+      
+      try {
+        RazorpayCheckout.open(options)
         .then(async (data) => {
           // Clear timeout
           if (razorpayTimeoutRef.current) {
@@ -329,7 +367,46 @@ const PaymentScreen = ({ route, navigation }) => {
               [{ text: 'OK' }]
             );
           }
+        })
+        .catch((openError) => {
+          // This catches errors from RazorpayCheckout.open() itself
+          console.error('❌ RazorpayCheckout.open() failed:', openError);
+          setProcessing(false);
+          setRazorpayOpened(false);
+          
+          // Clear timeout
+          if (razorpayTimeoutRef.current) {
+            clearTimeout(razorpayTimeoutRef.current);
+            razorpayTimeoutRef.current = null;
+          }
+          
+          // Clear pending payment
+          AsyncStorage.removeItem('pending_razorpay_payment').catch(() => {});
+          
+          Alert.alert(
+            'Payment Error',
+            `Failed to open payment gateway: ${openError.message || 'Unknown error'}\n\nPlease try again or contact support.`,
+            [{ text: 'OK' }]
+          );
         });
+      } catch (openError) {
+        // Catch synchronous errors when calling open()
+        console.error('❌ Error calling RazorpayCheckout.open():', openError);
+        setProcessing(false);
+        setRazorpayOpened(false);
+        
+        // Clear timeout
+        if (razorpayTimeoutRef.current) {
+          clearTimeout(razorpayTimeoutRef.current);
+          razorpayTimeoutRef.current = null;
+        }
+        
+        Alert.alert(
+          'Payment Error',
+          `Failed to initialize payment: ${openError.message || 'Unknown error'}`,
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
       console.error('❌ Payment initiation error:', error);
       console.error('Error details:', {
