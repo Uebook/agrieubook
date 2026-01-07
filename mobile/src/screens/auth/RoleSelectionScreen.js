@@ -69,18 +69,47 @@ const RoleSelectionScreen = ({ route, navigation }) => {
     try {
       // Login user with selected role
       const role = selectedRole === 'author' ? 'author' : 'reader';
-      const userId = userData?.id || Date.now().toString();
+      
+      // CRITICAL: userId must be the database UUID from userData
+      // If userData doesn't have an ID, we can't proceed - user needs to login again
+      if (!userData?.id) {
+        Alert.alert(
+          'Error',
+          'User ID not found. Please login again.',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.navigate('Login'),
+            },
+          ]
+        );
+        return;
+      }
+      
+      const userId = userData.id; // Always use the database UUID
+      
+      console.log('🔐 Logging in user:', {
+        userId,
+        role,
+        hasUserData: !!userData,
+        userDataKeys: userData ? Object.keys(userData) : [],
+      });
       
       // If user already has interests from registration, use them; otherwise skip onboarding
       const interests = userData?.interests || [];
       
-      await login(role, interests, userId, userData || {
-        id: userId,
-        mobile: mobileNumber,
-        name: `User ${mobileNumber?.slice(-4) || ''}`,
-        email: userData?.email || '',
+      // Ensure userData has all required fields
+      const completeUserData = {
+        ...userData,
+        id: userId, // Ensure ID is set
+        role: role, // Update role
+        mobile: userData.mobile || mobileNumber,
+        name: userData.name || `User ${mobileNumber?.slice(-4) || ''}`,
+        email: userData.email || '',
         interests: interests,
-      });
+      };
+      
+      await login(role, interests, userId, completeUserData);
       
       // Skip onboarding if interests are already set (from registration)
       // Otherwise, navigate to onboarding to select interests

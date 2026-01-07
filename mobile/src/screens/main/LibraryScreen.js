@@ -44,7 +44,20 @@ const LibraryScreen = ({ navigation }) => {
           setMyBooks(response.books || []);
         } else if (userId) {
           // For readers, fetch purchased books from orders API
+          console.log('📚 Fetching library for user:', {
+            userId,
+            userRole,
+            userIdType: typeof userId,
+            userIdLength: userId?.length,
+          });
+          
           const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
+          console.log('📦 Orders API response:', {
+            hasOrders: !!ordersResponse.orders,
+            ordersCount: ordersResponse.orders?.length || 0,
+            pagination: ordersResponse.pagination,
+          });
+          
           const orders = ordersResponse.orders || [];
           
           // Extract unique books from orders
