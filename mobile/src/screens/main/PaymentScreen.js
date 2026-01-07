@@ -102,21 +102,48 @@ const PaymentScreen = ({ route, navigation }) => {
       // Step 1: Create Razorpay order
       let orderResponse;
       try {
+        console.log('📦 Creating Razorpay order with:', {
+          amount: itemPrice,
+          bookId,
+          audioBookId,
+          userId,
+        });
+        
         orderResponse = await apiClient.createRazorpayOrder(
           itemPrice,
           bookId,
           audioBookId,
           userId
         );
-        console.log('✅ Order created:', orderResponse);
+        
+        console.log('✅ Order created successfully:', {
+          orderId: orderResponse?.orderId,
+          amount: orderResponse?.amount,
+          key: orderResponse?.key ? orderResponse.key.substring(0, 15) + '...' : 'missing',
+        });
       } catch (orderError) {
-        console.error('❌ Order creation error:', orderError);
-        const errorMessage = orderError.message || 'Failed to create payment order';
+        console.error('❌ Order creation error:', {
+          message: orderError.message,
+          status: orderError.status,
+          details: orderError.details,
+          error: orderError,
+        });
+        const errorMessage = orderError.message || orderError.details || 'Failed to create payment order';
         throw new Error(`Payment initiation error: ${errorMessage}`);
       }
 
       if (!orderResponse || !orderResponse.orderId) {
+        console.error('❌ Invalid order response:', orderResponse);
         throw new Error('Invalid order response: orderId is missing');
+      }
+
+      // Validate required fields
+      if (!orderResponse.amount || orderResponse.amount <= 0) {
+        throw new Error('Invalid order amount');
+      }
+
+      if (!orderResponse.key && !RAZORPAY_KEY_ID) {
+        throw new Error('Razorpay key is missing');
       }
 
       // Step 2: Open Razorpay Checkout - This opens a native Razorpay screen
@@ -133,7 +160,7 @@ const PaymentScreen = ({ route, navigation }) => {
           contact: '', // You can prefill user contact if available
           name: '', // You can prefill user name if available
         },
-        theme: { 
+        theme: {
           color: themeColors.primary.main || '#10B981',
         },
         notes: {
@@ -155,7 +182,15 @@ const PaymentScreen = ({ route, navigation }) => {
         key: razorpayOptions.key.substring(0, 15) + '...', // Don't log full key
       });
 
+      // Check if RazorpayCheckout is available
+      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== 'function') {
+        throw new Error('Razorpay SDK is not properly initialized. Please rebuild the app.');
+      }
+
+      console.log('✅ RazorpayCheckout is available, opening checkout...');
+
       // Open Razorpay Checkout - This will open a native full-screen payment UI
+      // Note: This must be called on the main thread
       RazorpayCheckout.open(razorpayOptions)
         .then(async (data) => {
           // Payment success - Razorpay SDK returns payment data
@@ -164,9 +199,9 @@ const PaymentScreen = ({ route, navigation }) => {
             razorpay_order_id: data.razorpay_order_id,
             razorpay_signature: data.razorpay_signature ? 'present' : 'missing',
           });
-          
+
           setProcessing(true); // Keep loading while verifying
-          
+
           try {
             // Verify payment with backend
             const verifyResponse = await apiClient.verifyRazorpayPayment(
@@ -186,8 +221,8 @@ const PaymentScreen = ({ route, navigation }) => {
                 'Payment Successful! 🎉',
                 'Your payment was successful and the book has been added to your library.',
                 [
-                  { 
-                    text: 'OK', 
+                  {
+                    text: 'OK',
                     onPress: () => {
                       // Navigate back and refresh if needed
                       navigation.goBack();
@@ -217,9 +252,9 @@ const PaymentScreen = ({ route, navigation }) => {
             message: error.message,
             error: error,
           });
-          
+
           setProcessing(false);
-          
+
           // Handle different error types
           if (error.code === 'NETWORK_ERROR') {
             Alert.alert(
@@ -245,7 +280,27 @@ const PaymentScreen = ({ route, navigation }) => {
               [{ text: 'OK' }]
             );
           }
+        })
+        .catch((openError) => {
+          // Catch errors from the open() call itself
+          console.error('❌ RazorpayCheckout.open() error:', openError);
+          setProcessing(false);
+          Alert.alert(
+            'SDK Error',
+            `Failed to open Razorpay checkout: ${openError.message || 'Unknown error'}\n\nPlease rebuild the app if this persists.`,
+            [{ text: 'OK' }]
+          );
         });
+      } catch (openError) {
+        // Catch synchronous errors
+        console.error('❌ Error calling RazorpayCheckout.open():', openError);
+        setProcessing(false);
+        Alert.alert(
+          'SDK Error',
+          `Failed to initialize Razorpay: ${openError.message || 'Unknown error'}`,
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
       console.error('❌ Payment initiation error:', error);
       console.error('Error details:', {
