@@ -20,21 +20,22 @@ export async function OPTIONS(request: NextRequest) {
   });
 }
 
-// Initialize Razorpay with test keys
-// Get keys from environment variables or use test keys
-// For production, set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment variables
-const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_S10gAhQQEnKuYr';
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'vvNvgwDNluGnA8GkHahHpgtp';
+// Initialize Razorpay - must be done inside the function to access runtime environment variables
+// In Vercel, environment variables are available at runtime, not at module load time
+function getRazorpayInstance() {
+  const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_S10gAhQQEnKuYr';
+  const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'vvNvgwDNluGnA8GkHahHpgtp';
 
-// Check if secret key is still placeholder
-if (RAZORPAY_KEY_SECRET === 'YOUR_RAZORPAY_TEST_SECRET_KEY' || !RAZORPAY_KEY_SECRET) {
-  console.warn('⚠️ WARNING: Razorpay secret key not configured. Using placeholder. Please set RAZORPAY_KEY_SECRET in environment variables.');
+  // Check if secret key is still placeholder
+  if (RAZORPAY_KEY_SECRET === 'YOUR_RAZORPAY_TEST_SECRET_KEY' || !RAZORPAY_KEY_SECRET) {
+    console.warn('⚠️ WARNING: Razorpay secret key not configured. Using placeholder. Please set RAZORPAY_KEY_SECRET in environment variables.');
+  }
+
+  return new Razorpay({
+    key_id: RAZORPAY_KEY_ID,
+    key_secret: RAZORPAY_KEY_SECRET,
+  });
 }
-
-const razorpay = new Razorpay({
-  key_id: RAZORPAY_KEY_ID,
-  key_secret: RAZORPAY_KEY_SECRET,
-});
 
 // Note: Replace 'YOUR_RAZORPAY_TEST_SECRET_KEY' with your actual Razorpay test secret key
 // You can get it from: https://dashboard.razorpay.com/app/keys
@@ -69,6 +70,19 @@ export async function POST(request: NextRequest) {
     // Amount in paise (Razorpay expects amount in smallest currency unit)
     const amountInPaise = Math.round(amount * 100);
 
+    // Get Razorpay instance
+    const razorpay = getRazorpayInstance();
+    const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_S10gAhQQEnKuYr';
+    const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'vvNvgwDNluGnA8GkHahHpgtp';
+
+    // Log credentials status (without exposing secret)
+    console.log('🔑 Razorpay config:', {
+      keyId: RAZORPAY_KEY_ID,
+      keyIdSet: !!process.env.RAZORPAY_KEY_ID,
+      secretSet: !!process.env.RAZORPAY_KEY_SECRET,
+      secretLength: RAZORPAY_KEY_SECRET?.length || 0,
+    });
+
     // Create Razorpay order
     const options = {
       amount: amountInPaise,
@@ -80,14 +94,6 @@ export async function POST(request: NextRequest) {
         audioBookId: audioBookId || null,
       },
     };
-
-    // Log credentials status (without exposing secret)
-    console.log('🔑 Razorpay config:', {
-      keyId: RAZORPAY_KEY_ID,
-      keyIdSet: !!process.env.RAZORPAY_KEY_ID,
-      secretSet: !!process.env.RAZORPAY_KEY_SECRET,
-      secretLength: RAZORPAY_KEY_SECRET?.length || 0,
-    });
 
     let order;
     try {
