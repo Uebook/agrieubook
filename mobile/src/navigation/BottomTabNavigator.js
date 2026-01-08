@@ -50,15 +50,17 @@ const BottomTabNavigator = () => {
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 * fontSizeMultiplier }}>🏠</Text>,
         }}
       />
-      <Tab.Screen 
-        name="BookStore" 
-        component={BookStoreScreen}
-        options={{
-          title: t('search'),
-          tabBarLabel: t('search'),
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 * fontSizeMultiplier }}>📚</Text>,
-        }}
-      />
+      {!isAuthor && (
+        <Tab.Screen 
+          name="BookStore" 
+          component={BookStoreScreen}
+          options={{
+            title: t('search'),
+            tabBarLabel: t('search'),
+            tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 * fontSizeMultiplier }}>📚</Text>,
+          }}
+        />
+      )}
       {!isAuthor && (
         <Tab.Screen 
           name="Library" 

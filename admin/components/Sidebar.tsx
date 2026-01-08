@@ -15,6 +15,7 @@ export default function Sidebar() {
         { href: '/users', icon: '👥', label: 'Users' },
         { href: '/purchases', icon: '🛒', label: 'Purchased Books' },
         { href: '/curriculum', icon: '📄', label: 'Government Curriculum' },
+        { href: '/youtube-channels', icon: '📺', label: 'YouTube Channels' },
         { href: '/settings', icon: '⚙️', label: 'Settings' },
         { href: '/profile', icon: '👤', label: 'Profile' },
     ];

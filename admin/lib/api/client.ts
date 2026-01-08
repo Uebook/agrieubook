@@ -388,6 +388,65 @@ class ApiClient {
     });
   }
 
+  // YouTube Channels API
+  async getYouTubeChannels(params?: { page?: number; limit?: number; category?: string; status?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, value.toString());
+        }
+      });
+    }
+    const query = queryParams.toString();
+    return this.request<{ channels: any[]; pagination: any }>(
+      `/api/youtube-channels${query ? `?${query}` : ''}`
+    );
+  }
+
+  async getYouTubeChannel(id: string) {
+    return this.request<{ channel: any }>(`/api/youtube-channels/${id}`);
+  }
+
+  async createYouTubeChannel(data: {
+    name: string;
+    description?: string;
+    channel_url: string;
+    thumbnail_url?: string;
+    subscriber_count?: number;
+    video_count?: number;
+    verified?: boolean;
+    category_ids?: string[];
+  }) {
+    return this.request<{ success: boolean; channel: any }>('/api/youtube-channels', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateYouTubeChannel(id: string, data: {
+    name?: string;
+    description?: string;
+    channel_url?: string;
+    thumbnail_url?: string;
+    subscriber_count?: number;
+    video_count?: number;
+    verified?: boolean;
+    category_ids?: string[];
+    is_active?: boolean;
+  }) {
+    return this.request<{ channel: any }>(`/api/youtube-channels/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteYouTubeChannel(id: string) {
+    return this.request<{ success: boolean }>(`/api/youtube-channels/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Auth API
   async login(email: string, password: string) {
     return this.request<{ success: boolean; user: any; token: string }>('/api/auth/login', {

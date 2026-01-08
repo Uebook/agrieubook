@@ -147,13 +147,15 @@ const ProfileScreen = ({ navigation }) => {
       });
     }
     
-    // Both roles can see orders
-    items.push({
-      id: 'orders',
-      title: `My Orders (${orderCount})`,
-      icon: '📦',
-      onPress: navigateToOrderHistory,
-    });
+    // Only readers can see orders (authors don't have orders)
+    if (!isAuthor) {
+      items.push({
+        id: 'orders',
+        title: `My Orders (${orderCount})`,
+        icon: '📦',
+        onPress: navigateToOrderHistory,
+      });
+    }
     
     // Only readers can use wishlist
     if (!isAuthor) {

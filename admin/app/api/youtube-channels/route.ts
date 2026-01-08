@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
+    const status = searchParams.get('status'); // 'all' for admin, undefined for mobile
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
 
@@ -15,9 +16,13 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('youtube_channels')
       .select('*')
-      .eq('is_active', true)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    // Only filter by active status if status is not 'all' (mobile app requests)
+    if (status !== 'all') {
+      query = query.eq('is_active', true);
+    }
 
     if (category) {
       query = query.contains('category_ids', [category]);
@@ -36,8 +41,12 @@ export async function GET(request: NextRequest) {
     // Get total count
     let countQuery = supabase
       .from('youtube_channels')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_active', true);
+      .select('*', { count: 'exact', head: true });
+
+    // Only filter by active status if status is not 'all'
+    if (status !== 'all') {
+      countQuery = countQuery.eq('is_active', true);
+    }
 
     if (category) {
       countQuery = countQuery.contains('category_ids', [category]);

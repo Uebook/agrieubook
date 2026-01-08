@@ -508,9 +508,9 @@ const BookUploadScreen = ({ navigation }) => {
             }
 
             // Handle response structure - API returns { success: true, url: ..., path: ... }
-            // Use extractFileUrl helper for safe URL extraction
-            pdfUrl = extractFileUrl(pdfResult);
-            if (!pdfUrl) {
+            // The uploadFile function now returns a consistent structure with url property
+            pdfUrl = pdfResult.url || extractFileUrl(pdfResult);
+            if (!pdfUrl || typeof pdfUrl !== 'string') {
               console.error('PDF upload response missing URL:', pdfResult);
               throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(pdfResult));
             }
@@ -567,10 +567,11 @@ const BookUploadScreen = ({ navigation }) => {
                         throw new Error(result.error || 'Upload failed');
                       }
 
-                      // Use extractFileUrl helper for safe URL extraction
-                      const imageUrl = extractFileUrl(result);
+                      // The uploadFile function now returns a consistent structure with url property
+                      // But use extractFileUrl as fallback for safety
+                      const imageUrl = result.url || extractFileUrl(result);
 
-                      if (imageUrl) {
+                      if (imageUrl && typeof imageUrl === 'string') {
                         coverImageUrls.push(imageUrl);
                         currentStep++;
                         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
@@ -606,14 +607,27 @@ const BookUploadScreen = ({ navigation }) => {
                       (uploadError?.name === 'TypeError' && errorMessage?.includes('Network')) ||
                       (uploadError?.name === 'TypeError' && errorMessage?.includes('fetch'));
 
-                    console.error(`Cover image ${i + 1} error details:`, {
+                    // Safely log error details without accessing potentially problematic properties
+                    const errorDetails = {
                       message: errorMessage,
-                      stack: (uploadError && typeof uploadError === 'object' && uploadError.stack) ? uploadError.stack : 'No stack trace',
-                      name: (uploadError && typeof uploadError === 'object' && uploadError.name) ? uploadError.name : 'Unknown',
-                      errorType: typeof uploadError,
                       isNetworkError: isNetworkError,
-                      originalError: uploadError,
-                    });
+                      errorType: typeof uploadError,
+                    };
+                    
+                    // Safely add stack and name if they exist
+                    if (uploadError && typeof uploadError === 'object') {
+                      if (uploadError.stack) {
+                        errorDetails.stack = uploadError.stack;
+                      }
+                      if (uploadError.name) {
+                        errorDetails.name = uploadError.name;
+                      }
+                    } else {
+                      errorDetails.stack = 'No stack trace';
+                      errorDetails.name = 'Unknown';
+                    }
+                    
+                    console.error(`Cover image ${i + 1} error details:`, errorDetails);
                     // Continue without this image - error already logged
                   })
               );
@@ -697,9 +711,9 @@ const BookUploadScreen = ({ navigation }) => {
             }
 
             // Handle response structure - API returns { success: true, url: ..., path: ... }
-            // Use extractFileUrl helper for safe URL extraction
-            audioUrl = extractFileUrl(audioResult);
-            if (!audioUrl) {
+            // The uploadFile function now returns a consistent structure with url property
+            audioUrl = audioResult.url || extractFileUrl(audioResult);
+            if (!audioUrl || typeof audioUrl !== 'string') {
               console.error('Audio upload response missing URL:', audioResult);
               throw new Error('Upload succeeded but no URL returned in response. Response: ' + JSON.stringify(audioResult));
             }
@@ -745,10 +759,11 @@ const BookUploadScreen = ({ navigation }) => {
                         throw new Error(result.error || 'Upload failed');
                       }
 
-                      // Use extractFileUrl helper for safe URL extraction
-                      const imageUrl = extractFileUrl(result);
+                      // The uploadFile function now returns a consistent structure with url property
+                      // But use extractFileUrl as fallback for safety
+                      const imageUrl = result.url || extractFileUrl(result);
 
-                      if (imageUrl) {
+                      if (imageUrl && typeof imageUrl === 'string') {
                         coverImageUrls.push(imageUrl);
                         currentStep++;
                         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
@@ -784,14 +799,27 @@ const BookUploadScreen = ({ navigation }) => {
                       (uploadError?.name === 'TypeError' && errorMessage?.includes('Network')) ||
                       (uploadError?.name === 'TypeError' && errorMessage?.includes('fetch'));
 
-                    console.error(`Cover image ${i + 1} error details:`, {
+                    // Safely log error details without accessing potentially problematic properties
+                    const errorDetails = {
                       message: errorMessage,
-                      stack: (uploadError && typeof uploadError === 'object' && uploadError.stack) ? uploadError.stack : 'No stack trace',
-                      name: (uploadError && typeof uploadError === 'object' && uploadError.name) ? uploadError.name : 'Unknown',
-                      errorType: typeof uploadError,
                       isNetworkError: isNetworkError,
-                      originalError: uploadError,
-                    });
+                      errorType: typeof uploadError,
+                    };
+                    
+                    // Safely add stack and name if they exist
+                    if (uploadError && typeof uploadError === 'object') {
+                      if (uploadError.stack) {
+                        errorDetails.stack = uploadError.stack;
+                      }
+                      if (uploadError.name) {
+                        errorDetails.name = uploadError.name;
+                      }
+                    } else {
+                      errorDetails.stack = 'No stack trace';
+                      errorDetails.name = 'Unknown';
+                    }
+                    
+                    console.error(`Cover image ${i + 1} error details:`, errorDetails);
                     // Continue without this image - error already logged
                   })
               );

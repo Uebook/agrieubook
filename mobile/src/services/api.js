@@ -143,7 +143,18 @@ class ApiClient {
   }
 
   async getUser(id) {
-    return this.request(`/api/users/${id}`);
+    try {
+      return await this.request(`/api/users/${id}`);
+    } catch (error) {
+      // If user not found (404), return null instead of throwing
+      // This allows the app to continue without user data
+      if (error.status === 404) {
+        console.warn(`User ${id} not found, returning null`);
+        return { user: null };
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async updateUser(id, data) {
@@ -173,6 +184,10 @@ class ApiClient {
 
   async getAudioBook(id) {
     return this.request(`/api/audio-books/${id}`);
+  }
+
+  async getAudioBookSignedUrl(id) {
+    return this.request(`/api/audio-books/${id}/audio`);
   }
 
   // Categories API (if you create one)
@@ -286,16 +301,32 @@ class ApiClient {
       }
 
       // The API returns { success: true, url: ..., path: ... }
-      // But check all possible formats
+      // Check all possible formats and ensure we return a consistent structure
+      let finalUrl = null;
+      
       if (result.url && typeof result.url === 'string') {
         console.log('✅ Found URL in result.url:', result.url);
-        return result;
+        finalUrl = result.url;
       } else if (result.data && result.data && result.data.url && typeof result.data.url === 'string') {
         console.log('✅ Found URL in result.data.url:', result.data.url);
-        return { ...result, url: result.data.url };
+        finalUrl = result.data.url;
       } else if (result.publicUrl && typeof result.publicUrl === 'string') {
         console.log('✅ Found URL in result.publicUrl:', result.publicUrl);
-        return { ...result, url: result.publicUrl };
+        finalUrl = result.publicUrl;
+      } else if (result.signedUrl && typeof result.signedUrl === 'string') {
+        console.log('✅ Found URL in result.signedUrl:', result.signedUrl);
+        finalUrl = result.signedUrl;
+      }
+      
+      if (finalUrl) {
+        // Return consistent structure with url property
+        return {
+          success: true,
+          url: finalUrl,
+          path: result.path || null,
+          publicUrl: result.publicUrl || finalUrl,
+          signedUrl: result.signedUrl || null,
+        };
       } else {
         console.error('❌ Unexpected upload response structure - no URL found');
         console.error('Response object:', JSON.stringify(result, null, 2));

@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
     const status = searchParams.get('status'); // Don't default to 'published', allow 'all'
+    const authorId = searchParams.get('authorId') || searchParams.get('author'); // Support both parameter names
     
     let query = supabase
       .from('audio_books')
@@ -25,6 +26,11 @@ export async function GET(request: NextRequest) {
     // Apply status filter only if specified (not 'all')
     if (status && status !== 'all') {
       query = query.eq('status', status);
+    }
+    
+    // Apply author filter if provided
+    if (authorId) {
+      query = query.eq('author_id', authorId);
     }
     
     const { data: audioBooks, error } = await query;
@@ -43,6 +49,10 @@ export async function GET(request: NextRequest) {
     
     if (status && status !== 'all') {
       countQuery = countQuery.eq('status', status);
+    }
+    
+    if (authorId) {
+      countQuery = countQuery.eq('author_id', authorId);
     }
     
     const { count: totalCount } = await countQuery;

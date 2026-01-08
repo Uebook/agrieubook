@@ -16,15 +16,39 @@ import {
   Image,
   Platform,
 } from 'react-native';
+import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
+import DocumentPicker from 'react-native-document-picker';
+import { InteractionManager } from 'react-native';
 import Header from '../../components/common/Header';
-import { categories, getBookById, getAudioBooks } from '../../services/dummyData';
+import { useCategories } from '../../context/CategoriesContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
+import {
+  requestPermissionWithFallback,
+  PERMISSIONS,
+  needsStoragePermissionForDocuments,
+} from '../../utils/permissions';
+
+// Helper: extract file URL
+const extractFileUrl = (res) => {
+  if (!res || typeof res !== 'object') return null;
+  return (
+    res.url ||
+    res.path ||
+    res.publicUrl ||
+    res.data?.url ||
+    res.data?.path ||
+    res.file?.url ||
+    res.file?.path ||
+    null
+  );
+};
 
 const EditBookScreen = ({ route, navigation }) => {
   const { getThemeColors, getFontSizeMultiplier } = useSettings();
   const { userId } = useAuth();
+  const { categories: categoriesList, loading: loadingCategories } = useCategories();
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { bookId, audioId, isAudio } = route.params || {};
@@ -66,6 +90,15 @@ const EditBookScreen = ({ route, navigation }) => {
             if (audio.cover_url) {
               setCoverImages([{ id: '1', uri: audio.cover_url, name: 'cover.jpg' }]);
             }
+            // Set existing audio file info if available
+            if (audio.audio_url) {
+              setAudioFile({
+                uri: audio.audio_url,
+                name: audio.audio_url.split('/').pop() || 'audio.mp3',
+                type: 'audio/mpeg',
+                isExisting: true, // Mark as existing file
+              });
+            }
           }
         } else if (bookId) {
           const response = await apiClient.getBook(bookId);
@@ -87,38 +120,7 @@ const EditBookScreen = ({ route, navigation }) => {
         }
       } catch (error) {
         console.error('Error fetching book data:', error);
-        // Fallback to dummy data
-        if (isAudio && audioId) {
-          const audioBooks = getAudioBooks();
-          const audio = audioBooks.find((a) => a.id === audioId);
-          if (audio && audio.authorId === userId) {
-            setFormData({
-              title: audio.title,
-              description: audio.description,
-              category: audio.categoryId,
-              price: '0',
-              language: audio.language,
-              pages: '',
-              isbn: '',
-            });
-            setCoverImages([{ id: '1', uri: audio.cover, name: 'cover.jpg' }]);
-          }
-        } else if (bookId) {
-          const book = getBookById(bookId);
-          if (book && book.authorId === userId) {
-            setFormData({
-              title: book.title,
-              description: book.summary,
-              category: book.categoryId,
-              price: book.price.toString(),
-              language: book.language,
-              pages: book.pages.toString(),
-              isbn: book.isbn || '',
-            });
-            const images = book.coverImages || [book.cover];
-            setCoverImages(images.map((img, idx) => ({ id: idx.toString(), uri: img, name: `cover_${idx}.jpg` })));
-          }
-        }
+        Alert.alert('Error', 'Failed to load book data. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -165,28 +167,172 @@ const EditBookScreen = ({ route, navigation }) => {
     );
   };
 
-  const selectImageFromCamera = () => {
-    const newImage = {
-      id: Date.now().toString(),
-      uri: `https://images.unsplash.com/photo-${Date.now()}?w=400&h=600&fit=crop`,
-      type: 'image/jpeg',
-      name: `cover_${Date.now()}.jpg`,
-    };
-    setCoverImages([...coverImages, newImage]);
+  const selectImageFromCamera = async () => {
+    try {
+      const hasPermission = await requestPermissionWithFallback(
+        PERMISSIONS.CAMERA,
+        'Camera'
+      );
+      if (!hasPermission) {
+        return;
+      }
+
+      launchCamera(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+          maxWidth: 2000,
+          maxHeight: 2000,
+          includeBase64: false,
+        },
+        (response) => {
+          if (response.didCancel) {
+            return;
+          }
+          if (response.errorMessage) {
+            Alert.alert('Error', `Failed to take photo: ${response.errorMessage}`);
+            return;
+          }
+          if (response.assets && response.assets[0]) {
+            const asset = response.assets[0];
+            const newImage = {
+              id: Date.now().toString(),
+              uri: asset.uri || '',
+              type: asset.type || 'image/jpeg',
+              name: asset.fileName || asset.uri?.split('/').pop() || `cover_${Date.now()}.jpg`,
+              file: {
+                uri: asset.uri || '',
+                type: asset.type || 'image/jpeg',
+                name: asset.fileName || asset.uri?.split('/').pop() || `cover_${Date.now()}.jpg`,
+              },
+            };
+            setCoverImages((prev) => [...prev, newImage]);
+          }
+        }
+      );
+    } catch (err) {
+      console.error('Error launching camera:', err);
+      Alert.alert('Error', `Failed to open camera: ${err?.message || 'Unknown error'}`);
+    }
   };
 
-  const selectImageFromGallery = () => {
-    const newImage = {
-      id: Date.now().toString(),
-      uri: `https://images.unsplash.com/photo-${Date.now()}?w=400&h=600&fit=crop`,
-      type: 'image/jpeg',
-      name: `cover_${Date.now()}.jpg`,
-    };
-    setCoverImages([...coverImages, newImage]);
+  const selectImageFromGallery = async () => {
+    try {
+      const hasPermission = await requestPermissionWithFallback(
+        PERMISSIONS.STORAGE,
+        'Storage'
+      );
+      if (!hasPermission) {
+        return;
+      }
+
+      launchImageLibrary(
+        {
+          mediaType: 'photo',
+          quality: 0.8,
+          selectionLimit: 10,
+          maxWidth: 2000,
+          maxHeight: 2000,
+          includeBase64: false,
+        },
+        (response) => {
+          if (response.didCancel) {
+            return;
+          }
+          if (response.errorMessage) {
+            Alert.alert('Error', `Failed to select image: ${response.errorMessage}`);
+            return;
+          }
+          if (response.assets && response.assets.length > 0) {
+            const newImages = response.assets.map((asset, index) => ({
+              id: `${Date.now()}_${index}`,
+              uri: asset.uri || '',
+              type: asset.type || 'image/jpeg',
+              name: asset.fileName || asset.uri?.split('/').pop() || `cover_${Date.now()}_${index}.jpg`,
+              file: {
+                uri: asset.uri || '',
+                type: asset.type || 'image/jpeg',
+                name: asset.fileName || asset.uri?.split('/').pop() || `cover_${Date.now()}_${index}.jpg`,
+              },
+            }));
+            setCoverImages((prev) => [...prev, ...newImages]);
+          }
+        }
+      );
+    } catch (err) {
+      console.error('Error launching image library:', err);
+      Alert.alert('Error', `Failed to open gallery: ${err?.message || 'Unknown error'}`);
+    }
   };
 
   const removeImage = (imageId) => {
     setCoverImages(coverImages.filter((img) => img.id !== imageId));
+  };
+
+  const handleAudioPicker = async () => {
+    try {
+      // Wait for interactions to complete
+      await new Promise((resolve) => {
+        InteractionManager.runAfterInteractions(() => {
+          setTimeout(resolve, 300);
+        });
+      });
+
+      // On Android 13+, document picker doesn't need storage permission
+      if (needsStoragePermissionForDocuments()) {
+        const hasPermission = await requestPermissionWithFallback(
+          PERMISSIONS.STORAGE,
+          'Storage'
+        );
+        if (!hasPermission) {
+          return;
+        }
+      }
+
+      const result = await DocumentPicker.pick({
+        type: [
+          DocumentPicker.types.audio,
+          'audio/mpeg',
+          'audio/mp3',
+          'audio/m4a',
+          'audio/wav',
+        ],
+        copyTo: 'cachesDirectory',
+      });
+
+      // Handle array result from pick()
+      const file = Array.isArray(result) ? result[0] : result;
+      if (file) {
+        setAudioFile({
+          uri: file.fileCopyUri || file.uri,
+          name: file.name || 'audio.mp3',
+          type: file.type || 'audio/mpeg',
+          size: file.size,
+          file: {
+            uri: file.fileCopyUri || file.uri,
+            type: file.type || 'audio/mpeg',
+            name: file.name || 'audio.mp3',
+          },
+        });
+      }
+    } catch (err) {
+      if (DocumentPicker.isCancel(err)) {
+        // User cancelled the picker - no error needed
+        return;
+      } else {
+        console.error('Error picking audio:', err);
+        const errorMessage = err?.message || err?.toString() || 'Unknown error';
+        Alert.alert(
+          'Error',
+          `Failed to select audio file: ${errorMessage}\n\nPlease try again.`,
+          [{ text: 'OK' }]
+        );
+      }
+    }
+  };
+
+  const removeAudioFile = () => {
+    setAudioFile(null);
   };
 
   const handleSave = async () => {
@@ -220,12 +366,18 @@ const EditBookScreen = ({ route, navigation }) => {
         for (const image of coverImages) {
           if (image.uri && !image.uri.startsWith('http')) {
             // New image, upload it
+            const imageFile = image.file || {
+              uri: image.uri,
+              type: image.type || 'image/jpeg',
+              name: image.name || 'cover.jpg',
+            };
             const uploadResult = await apiClient.uploadFile(
-              { uri: image.uri, type: image.type || 'image/jpeg', name: image.name || 'cover.jpg' },
+              imageFile,
               'audio-books',
-              'covers'
+              'covers',
+              userId
             );
-            coverImageUrls.push(uploadResult.url);
+            coverImageUrls.push(uploadResult.url || extractFileUrl(uploadResult));
           } else {
             // Existing image URL
             coverImageUrls.push(image.uri);
@@ -234,6 +386,22 @@ const EditBookScreen = ({ route, navigation }) => {
 
         if (coverImageUrls.length > 0) {
           audioBookData.cover_url = coverImageUrls[0];
+        }
+
+        // Upload audio file if new one is selected
+        if (audioFile && audioFile.file && !audioFile.isExisting) {
+          const fileToUpload = audioFile.file || {
+            uri: audioFile.uri,
+            type: audioFile.type || 'audio/mpeg',
+            name: audioFile.name || 'audio.mp3',
+          };
+          const audioResult = await apiClient.uploadFile(
+            fileToUpload,
+            'audio-books',
+            'audio',
+            userId
+          );
+          audioBookData.audio_url = audioResult.url || extractFileUrl(audioResult);
         }
 
         await apiClient.updateAudioBook(audioId, audioBookData);
@@ -378,6 +546,17 @@ const EditBookScreen = ({ route, navigation }) => {
       color: themeColors.text.light,
       fontWeight: '600',
     },
+    categoryLoadingContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 16,
+    },
+    categoryLoadingText: {
+      marginLeft: 8,
+      fontSize: 14 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+    },
     uploadSection: {
       marginBottom: 24,
     },
@@ -457,6 +636,46 @@ const EditBookScreen = ({ route, navigation }) => {
       marginTop: 8,
       textAlign: 'center',
       fontStyle: 'italic',
+    },
+    audioFileInfo: {
+      marginTop: 12,
+      padding: 12,
+      backgroundColor: themeColors.background.secondary,
+      borderRadius: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+    },
+    audioFileName: {
+      fontSize: 14 * fontSizeMultiplier,
+      color: themeColors.text.primary,
+      fontWeight: '600',
+      flex: 1,
+      marginRight: 8,
+    },
+    audioFileSize: {
+      fontSize: 12 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+      marginRight: 8,
+    },
+    existingFileText: {
+      fontSize: 11 * fontSizeMultiplier,
+      color: themeColors.text.tertiary,
+      fontStyle: 'italic',
+      width: '100%',
+      marginTop: 4,
+    },
+    removeAudioButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: themeColors.error || '#F44336',
+      borderRadius: 6,
+    },
+    removeAudioText: {
+      color: themeColors.text.light,
+      fontSize: 12 * fontSizeMultiplier,
+      fontWeight: '600',
     },
     languageButtons: {
       flexDirection: 'row',
@@ -570,32 +789,39 @@ const EditBookScreen = ({ route, navigation }) => {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Category *</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.categoryScroll}
-            >
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[
-                    styles.categoryChip,
-                    formData.category === cat.id && styles.categoryChipActive,
-                  ]}
-                  onPress={() => handleCategoryChange(cat.id)}
-                >
-                  <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
-                  <Text
+            {loadingCategories ? (
+              <View style={styles.categoryLoadingContainer}>
+                <ActivityIndicator size="small" color={themeColors.primary.main} />
+                <Text style={styles.categoryLoadingText}>Loading categories...</Text>
+              </View>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.categoryScroll}
+              >
+                {(categoriesList || []).map((cat) => (
+                  <TouchableOpacity
+                    key={cat.id}
                     style={[
-                      styles.categoryChipText,
-                      formData.category === cat.id && styles.categoryChipTextActive,
+                      styles.categoryChip,
+                      formData.category === cat.id && styles.categoryChipActive,
                     ]}
+                    onPress={() => handleCategoryChange(cat.id)}
                   >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+                    <Text style={styles.categoryChipIcon}>{cat.icon}</Text>
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        formData.category === cat.id && styles.categoryChipTextActive,
+                      ]}
+                    >
+                      {cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
           </View>
 
           <View style={styles.row}>
@@ -720,6 +946,46 @@ const EditBookScreen = ({ route, navigation }) => {
               </Text>
             )}
           </View>
+
+          {/* Audio File Upload Section - Only for Audio Books */}
+          {isAudio && (
+            <View style={styles.uploadSection}>
+              <Text style={styles.sectionTitle}>Audio File</Text>
+              <Text style={[styles.uploadHint, { marginBottom: 12 }]}>
+                Upload or replace the audio file for this audio book
+              </Text>
+              <TouchableOpacity
+                style={styles.uploadButton}
+                onPress={handleAudioPicker}
+              >
+                <Text style={styles.uploadButtonText}>🎙️ {audioFile ? 'Replace Audio File' : 'Choose Audio File'}</Text>
+                <Text style={styles.uploadHint}>MP3, M4A, WAV formats supported</Text>
+              </TouchableOpacity>
+              {audioFile && (
+                <View style={styles.audioFileInfo}>
+                  <Text style={styles.audioFileName} numberOfLines={1}>
+                    🎙️ {audioFile.name || 'audio.mp3'}
+                  </Text>
+                  {audioFile.size && (
+                    <Text style={styles.audioFileSize}>
+                      {(audioFile.size / (1024 * 1024)).toFixed(2)} MB
+                    </Text>
+                  )}
+                  {audioFile.isExisting && (
+                    <Text style={styles.existingFileText}>
+                      (Current file - select new file to replace)
+                    </Text>
+                  )}
+                  <TouchableOpacity
+                    onPress={removeAudioFile}
+                    style={styles.removeAudioButton}
+                  >
+                    <Text style={styles.removeAudioText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
 
           <TouchableOpacity
             style={[

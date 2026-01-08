@@ -43,35 +43,50 @@ const HomeScreen = ({ navigation }) => {
       try {
         setLoading(true);
         
-        // For authors: fetch only their own books
+        // For authors: fetch only their own books (all statuses)
         // For readers: fetch all published books
         const params = isAuthor && userId 
-          ? { author: userId, limit: 100 } // Get all books by this author
+          ? { authorId: userId, status: 'all', limit: 100 } // Get all books by this author (all statuses)
           : { status: 'published', limit: 50 };
         
-        const promises = [
-          apiClient.getBooks(params),
-          apiClient.getAudioBooks(isAuthor && userId ? { author: userId, limit: 100 } : { limit: 50 }),
-        ];
-
-        // Fetch notifications if user is logged in
+        // Fetch books and audio books (critical data)
+        const [booksResult, audioBooksResult] = await Promise.all([
+          apiClient.getBooks(params).catch(err => {
+            console.error('Error fetching books:', err);
+            return { books: [] };
+          }),
+          apiClient.getAudioBooks(isAuthor && userId ? { authorId: userId, limit: 100 } : { limit: 50 }).catch(err => {
+            console.error('Error fetching audio books:', err);
+            return { audioBooks: [] };
+          }),
+        ]);
+        
+        setAllBooks(booksResult.books || []);
+        setAllAudioBooks(audioBooksResult.audioBooks || []);
+        
+        // Fetch notifications and user data (non-critical, handle errors gracefully)
         if (userId) {
-          promises.push(apiClient.getNotifications(userId, 'all'));
-          // Fetch user data to get rating
-          promises.push(apiClient.getUser(userId));
-        }
-        
-        const results = await Promise.all(promises);
-        
-        setAllBooks(results[0].books || []);
-        setAllAudioBooks(results[1].audioBooks || []);
-        
-        if (userId && results[2]) {
-          setNotifications(results[2].notifications || []);
-        }
-        if (userId && results[3] && results[3].user) {
-          // Calculate or get user rating (you might need to add rating to user model)
-          setUserRating(results[3].user.rating || 0);
+          try {
+            const notificationsResult = await apiClient.getNotifications(userId, 'all');
+            if (notificationsResult) {
+              setNotifications(notificationsResult.notifications || []);
+            }
+          } catch (err) {
+            console.warn('Error fetching notifications:', err);
+            setNotifications([]);
+          }
+          
+          try {
+            const userResult = await apiClient.getUser(userId);
+            if (userResult && userResult.user) {
+              // Calculate or get user rating (you might need to add rating to user model)
+              setUserRating(userResult.user.rating || 0);
+            }
+          } catch (err) {
+            console.warn('Error fetching user data:', err);
+            // User data is not critical, continue without it
+            setUserRating(0);
+          }
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -690,12 +705,14 @@ const HomeScreen = ({ navigation }) => {
             )}
           </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={styles.searchBar}
-          onPress={() => navigation.navigate('Search')}
-        >
-          <Text style={styles.searchPlaceholder}>Search books...</Text>
-        </TouchableOpacity>
+        {!isAuthor && (
+          <TouchableOpacity
+            style={styles.searchBar}
+            onPress={() => navigation.navigate('Search')}
+          >
+            <Text style={styles.searchPlaceholder}>Search books...</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Author Quick Upload Button */}

@@ -10,16 +10,34 @@ export async function GET(
     const supabase = createServerClient();
     const { id } = await params;
     
-    // Get user - should be a reader (not publisher/author)
+    // Get user - support all roles (reader, author, etc.)
     const { data: user, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', id)
-      .eq('role', 'reader')
       .single();
     
     if (error) {
       console.error('Error fetching user:', error);
+      // Check if it's a "not found" error (PGRST116) or actual database error
+      if (error.code === 'PGRST116' || error.message?.includes('No rows')) {
+        // User doesn't exist - return 404 but don't log as error
+        console.log(`User ${id} not found in database`);
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        );
+      }
+      // Other database errors
+      console.error('Database error fetching user:', error);
+      return NextResponse.json(
+        { error: 'Failed to fetch user', details: error.message },
+        { status: 500 }
+      );
+    }
+    
+    if (!user) {
+      // This shouldn't happen if error is null, but handle it anyway
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
