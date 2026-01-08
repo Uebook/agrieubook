@@ -204,31 +204,63 @@ class ApiClient {
       throw new Error('File is required');
     }
 
+    // Handle file URI - support both file:// and content:// URIs (Android)
     const fileUri = file.uri || file.path;
     if (!fileUri) {
       throw new Error('File URI is required');
+    }
+
+    // Normalize URI - ensure it's in the correct format
+    let normalizedUri = fileUri;
+    if (!normalizedUri.startsWith('file://') && !normalizedUri.startsWith('content://') && !normalizedUri.startsWith('http://') && !normalizedUri.startsWith('https://')) {
+      // If it's a relative path, make it absolute
+      if (normalizedUri.startsWith('/')) {
+        normalizedUri = 'file://' + normalizedUri;
+      } else {
+        normalizedUri = 'file:///' + normalizedUri;
+      }
     }
 
     // Extract file name - ensure we have a valid name
     let fileName = file.name;
     if (!fileName) {
       // Extract from URI
-      const uriParts = fileUri.split('/');
+      const uriParts = normalizedUri.split('/');
       fileName = uriParts[uriParts.length - 1] || 'file.pdf';
       // Remove query parameters if any
       fileName = fileName.split('?')[0];
+      // Remove any encoding
+      try {
+        fileName = decodeURIComponent(fileName);
+      } catch (e) {
+        // If decoding fails, use as is
+      }
     }
     
-    // Use the actual file type, or fallback to application/octet-stream like OkHttp
-    const fileType = file.type || 'application/octet-stream';
+    // Use the actual file type, or fallback based on file extension
+    let fileType = file.type;
+    if (!fileType) {
+      const ext = fileName.split('.').pop()?.toLowerCase();
+      const mimeTypes = {
+        'pdf': 'application/pdf',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'mp3': 'audio/mpeg',
+        'm4a': 'audio/m4a',
+        'wav': 'audio/wav',
+      };
+      fileType = mimeTypes[ext] || 'application/octet-stream';
+    }
 
     // Create FormData - React Native format
     const formData = new FormData();
     
     // Append file - React Native FormData format
     // This matches the OkHttp pattern: addFormDataPart("file", "", RequestBody.create(...))
+    // Use normalized URI
     formData.append('file', {
-      uri: fileUri,
+      uri: normalizedUri,
       type: fileType,
       name: fileName,
     } as any); // Type assertion for React Native FormData
@@ -251,8 +283,9 @@ class ApiClient {
       bucket,
       folder: folder || 'none',
       authorId: authorId || 'none',
-      uriLength: fileUri.length,
-      uriPrefix: fileUri.substring(0, 20) + '...',
+      originalUri: fileUri.substring(0, 50) + (fileUri.length > 50 ? '...' : ''),
+      normalizedUri: normalizedUri.substring(0, 50) + (normalizedUri.length > 50 ? '...' : ''),
+      uriScheme: normalizedUri.split(':')[0],
     });
 
     const url = `${this.baseUrl}/api/upload`;
@@ -266,15 +299,26 @@ class ApiClient {
       
       let response;
       try {
+        // React Native FormData automatically sets Content-Type with boundary
+        // Do NOT set Content-Type header manually - let React Native handle it
         response = await fetch(url, {
           method: 'POST',
           body: formData,
           headers: {
             'Accept': '*/*',
+            // Explicitly do NOT set Content-Type - React Native FormData sets it automatically
           },
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
+        
+        // Log response headers for debugging
+        console.log('📥 Response headers:', {
+          status: response.status,
+          statusText: response.statusText,
+          contentType: response.headers.get('content-type'),
+          contentLength: response.headers.get('content-length'),
+        });
       } catch (fetchError) {
         clearTimeout(timeoutId);
         console.error(`❌ Fetch error (attempt ${retryCount + 1}):`, fetchError);
