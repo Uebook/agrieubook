@@ -195,8 +195,10 @@ class ApiClient {
     return this.request('/api/categories');
   }
 
-  // Upload API - SIMPLIFIED AND RELIABLE
-  async uploadFile(file, bucket, folder, authorId = null) {
+  // Upload API - SIMPLIFIED AND RELIABLE WITH RETRY LOGIC
+  async uploadFile(file, bucket, folder, authorId = null, retryCount = 0) {
+    const MAX_RETRIES = 2; // Retry up to 2 times (3 total attempts)
+    
     // Validate inputs
     if (!file) {
       throw new Error('File is required');
@@ -229,12 +231,12 @@ class ApiClient {
 
     const url = `${this.baseUrl}/api/upload`;
     
-    console.log('📤 Uploading file:', { fileName, fileType, bucket, folder });
+    console.log(`📤 Uploading file (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, { fileName, fileType, bucket, folder });
 
     try {
       // Make the request with timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout for large files
       
       let response;
       try {
@@ -249,13 +251,26 @@ class ApiClient {
         clearTimeout(timeoutId);
       } catch (fetchError) {
         clearTimeout(timeoutId);
-        console.error('❌ Fetch error:', fetchError);
+        console.error(`❌ Fetch error (attempt ${retryCount + 1}):`, fetchError);
         
         // Handle different types of fetch errors
         if (fetchError.name === 'AbortError') {
+          // Retry on timeout if we have retries left
+          if (retryCount < MAX_RETRIES) {
+            console.log(`⏳ Upload timeout, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+            return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+          }
           throw new Error('Upload timeout: The request took too long. Please try again.');
         }
+        
+        // Retry on network errors if we have retries left
         if (fetchError.message && (fetchError.message.includes('Network request failed') || fetchError.message.includes('Failed to fetch'))) {
+          if (retryCount < MAX_RETRIES) {
+            console.log(`🔄 Network error, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+            return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+          }
           throw new Error('Network error: Cannot reach the server. Please check your internet connection and try again.');
         }
         throw fetchError;
@@ -263,7 +278,7 @@ class ApiClient {
 
       // Read response as text
       const responseText = await response.text();
-      console.log('📥 Upload response status:', response.status);
+      console.log(`📥 Upload response status (attempt ${retryCount + 1}):`, response.status);
       console.log('📥 Upload response text (first 200 chars):', responseText.substring(0, 200));
 
       // Parse JSON response
@@ -278,6 +293,14 @@ class ApiClient {
       // Check for HTTP errors
       if (!response.ok) {
         const errorMsg = result.error || result.message || `Upload failed with status ${response.status}`;
+        
+        // Retry on 5xx errors (server errors) if we have retries left
+        if (response.status >= 500 && retryCount < MAX_RETRIES) {
+          console.log(`🔄 Server error ${response.status}, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+        }
+        
         throw new Error(errorMsg);
       }
 
@@ -305,9 +328,23 @@ class ApiClient {
         signedUrl: result.signedUrl || null,
       };
     } catch (error) {
-      console.error('❌ Upload error:', error);
+      console.error(`❌ Upload error (attempt ${retryCount + 1}):`, error);
       console.error('Error type:', error.constructor.name);
       console.error('Error message:', error.message);
+      
+      // If this is a retryable error and we haven't exhausted retries, retry
+      const isRetryable = error.message && (
+        error.message.includes('Network request failed') || 
+        error.message.includes('Failed to fetch') || 
+        error.message.includes('timeout') ||
+        error.message.includes('Cannot reach')
+      );
+      
+      if (isRetryable && retryCount < MAX_RETRIES) {
+        console.log(`🔄 Retryable error detected, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+      }
       
       // Provide user-friendly error messages
       if (error.message && (error.message.includes('Network request failed') || error.message.includes('Failed to fetch') || error.message.includes('Cannot reach'))) {
