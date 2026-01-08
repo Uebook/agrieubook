@@ -290,22 +290,26 @@ class ApiClient {
       let result;
       try {
         result = JSON.parse(responseText);
-        console.log('Upload success response (parsed):', JSON.stringify(result, null, 2));
+        console.log('📥 Upload response (parsed):', JSON.stringify(result, null, 2));
+        console.log('📥 Upload response type:', typeof result);
+        console.log('📥 Upload response keys:', result && typeof result === 'object' ? Object.keys(result) : 'N/A');
+        console.log('📥 Upload response has url?', result && typeof result === 'object' ? ('url' in result) : false);
       } catch (parseError) {
-        console.error('Failed to parse upload response as JSON:', responseText);
+        console.error('❌ Failed to parse upload response as JSON:', responseText);
         throw new Error('Invalid JSON response from upload API: ' + parseError.message);
       }
       
       // Ensure we have the expected structure
       if (!result || typeof result !== 'object') {
-        console.error('Upload response is not an object:', typeof result, result);
+        console.error('❌ Upload response is not an object:', typeof result, result);
         throw new Error('Upload response is invalid: ' + typeof result);
       }
       
-      // Check for error in response first
-      if (result.error) {
+      // Check for error in response first - use 'in' operator to safely check
+      if ('error' in result && result.error) {
         console.error('❌ Upload API returned error:', result.error);
-        throw new Error(result.error || 'Upload failed');
+        const errorMsg = typeof result.error === 'string' ? result.error : 'Upload failed';
+        throw new Error(errorMsg);
       }
 
       // The API returns { success: true, url: ..., path: ... }
@@ -329,12 +333,17 @@ class ApiClient {
       
       if (finalUrl) {
         // Return consistent structure with url property
+        // Use bracket notation and 'in' operator to safely access all properties
+        const pathValue = ('path' in result && result.path) ? result.path : null;
+        const publicUrlValue = ('publicUrl' in result && result.publicUrl) ? result.publicUrl : finalUrl;
+        const signedUrlValue = ('signedUrl' in result && result.signedUrl) ? result.signedUrl : null;
+        
         return {
           success: true,
           url: finalUrl,
-          path: result.path || null,
-          publicUrl: result.publicUrl || finalUrl,
-          signedUrl: result.signedUrl || null,
+          path: pathValue,
+          publicUrl: publicUrlValue,
+          signedUrl: signedUrlValue,
         };
       } else {
         console.error('❌ Unexpected upload response structure - no URL found');
