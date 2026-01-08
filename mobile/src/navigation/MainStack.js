@@ -26,6 +26,7 @@ import AudioBookScreen from '../screens/main/AudioBookScreen';
 import GovernmentCurriculumScreen from '../screens/main/GovernmentCurriculumScreen';
 import EditBookScreen from '../screens/main/EditBookScreen';
 import MyBooksScreen from '../screens/main/MyBooksScreen';
+import FileUploadScreen from '../screens/main/FileUploadScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -119,6 +120,10 @@ const MainStack = () => {
       <Stack.Screen 
         name="MyBooks" 
         component={MyBooksScreen}
+      />
+      <Stack.Screen 
+        name="FileUpload" 
+        component={FileUploadScreen}
       />
     </Stack.Navigator>
   );

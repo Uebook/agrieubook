@@ -271,6 +271,12 @@ const SettingsScreen = ({ navigation }) => {
           type="arrow"
           onPress={() => navigation.navigate('EditProfile')}
         />
+        <SettingItem
+          title="File Upload"
+          subtitle="Upload images and documents"
+          type="arrow"
+          onPress={() => navigation.navigate('FileUpload')}
+        />
       </SettingSection>
 
       {/* Notification Settings */}
