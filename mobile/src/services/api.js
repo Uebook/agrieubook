@@ -232,14 +232,34 @@ class ApiClient {
     console.log('📤 Uploading file:', { fileName, fileType, bucket, folder });
 
     try {
-      // Make the request
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Accept': '*/*',
-        },
-      });
+      // Make the request with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Accept': '*/*',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        console.error('❌ Fetch error:', fetchError);
+        
+        // Handle different types of fetch errors
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Upload timeout: The request took too long. Please try again.');
+        }
+        if (fetchError.message && (fetchError.message.includes('Network request failed') || fetchError.message.includes('Failed to fetch'))) {
+          throw new Error('Network error: Cannot reach the server. Please check your internet connection and try again.');
+        }
+        throw fetchError;
+      }
 
       // Read response as text
       const responseText = await response.text();
@@ -252,7 +272,7 @@ class ApiClient {
         result = JSON.parse(responseText);
       } catch (parseError) {
         console.error('❌ Failed to parse response as JSON:', responseText);
-        throw new Error(`Server returned invalid response: ${responseText.substring(0, 100)}`);
+        throw new Error(`Server returned invalid response. Status: ${response.status}`);
       }
 
       // Check for HTTP errors
@@ -270,9 +290,11 @@ class ApiClient {
       const uploadUrl = result.url || result.publicUrl || result.signedUrl;
       
       if (!uploadUrl || typeof uploadUrl !== 'string') {
-        console.error('❌ No URL in response:', result);
+        console.error('❌ No URL in response:', JSON.stringify(result, null, 2));
         throw new Error('Upload succeeded but no URL returned. Please try again.');
       }
+
+      console.log('✅ Upload successful, URL:', uploadUrl.substring(0, 50) + '...');
 
       // Return consistent structure
       return {
@@ -284,9 +306,11 @@ class ApiClient {
       };
     } catch (error) {
       console.error('❌ Upload error:', error);
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
       
       // Provide user-friendly error messages
-      if (error.message.includes('Network request failed') || error.message.includes('Failed to fetch')) {
+      if (error.message && (error.message.includes('Network request failed') || error.message.includes('Failed to fetch') || error.message.includes('Cannot reach'))) {
         throw new Error('Network error: Please check your internet connection and try again.');
       }
       
