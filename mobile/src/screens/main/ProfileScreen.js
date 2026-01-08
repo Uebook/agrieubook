@@ -29,7 +29,12 @@ const ProfileScreen = ({ navigation }) => {
   const [orderCount, setOrderCount] = useState(0);
   
   // Determine if user is author - check both userRole from context and user.role from API
-  const isAuthor = userRole === 'author' || user?.role === 'author' || user?.user_role === 'author';
+  // Use useMemo to recalculate when user or userRole changes
+  const isAuthor = useMemo(() => {
+    const roleFromContext = userRole === 'author';
+    const roleFromUser = user?.role === 'author' || user?.user_role === 'author';
+    return roleFromContext || roleFromUser;
+  }, [userRole, user]);
 
   // Fetch user data and order count from API
   useEffect(() => {
