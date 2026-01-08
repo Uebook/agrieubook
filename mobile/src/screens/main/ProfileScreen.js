@@ -24,10 +24,12 @@ const ProfileScreen = ({ navigation }) => {
   const themeColors = getThemeColors();
   const fontSizeMultiplier = getFontSizeMultiplier();
   const { userRole, userData, logout, userId } = useAuth();
-  const isAuthor = userRole === 'author';
   const [user, setUser] = useState(userData || userProfile);
   const [loading, setLoading] = useState(false);
   const [orderCount, setOrderCount] = useState(0);
+  
+  // Determine if user is author - check both userRole from context and user.role from API
+  const isAuthor = userRole === 'author' || user?.role === 'author' || user?.user_role === 'author';
 
   // Fetch user data and order count from API
   useEffect(() => {
@@ -36,7 +38,12 @@ const ProfileScreen = ({ navigation }) => {
         try {
           setLoading(true);
           const response = await apiClient.getUser(userId);
-          setUser(response.user || userData);
+          const fetchedUser = response.user || userData;
+          setUser(fetchedUser);
+          // Update userRole if it's different in the fetched user data
+          if (fetchedUser && (fetchedUser.role || fetchedUser.user_role) && !userRole) {
+            console.log('User role from API:', fetchedUser.role || fetchedUser.user_role);
+          }
         } catch (error) {
           console.error('Error fetching user data:', error);
           // Use dummy data as fallback
@@ -137,6 +144,14 @@ const ProfileScreen = ({ navigation }) => {
   const menuItems = useMemo(() => {
     const items = [];
     
+    // Debug: Log role information
+    console.log('ProfileScreen - Role check:', {
+      userRole,
+      userRoleFromContext: userRole,
+      userRoleFromUser: user?.role || user?.user_role,
+      isAuthor,
+    });
+    
     // Authors can upload books
     if (isAuthor) {
       items.push({
@@ -194,7 +209,7 @@ const ProfileScreen = ({ navigation }) => {
     });
     
     return items;
-  }, [isAuthor, orderCount, navigateToBookUpload, navigateToOrderHistory, navigateToWishlist, navigateToReviews, navigateToYouTubeChannels, navigateToSettings]);
+  }, [isAuthor, orderCount, userRole, user, navigateToBookUpload, navigateToOrderHistory, navigateToWishlist, navigateToReviews, navigateToYouTubeChannels, navigateToSettings]);
 
   // Memoize styles to prevent re-creation on every render
   const styles = useMemo(() => StyleSheet.create({
