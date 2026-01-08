@@ -623,21 +623,60 @@ const BookUploadScreen = ({ navigation }) => {
               throw new Error('Invalid response object received from upload API');
             }
           } catch (extractError) {
-            console.error('Error extracting URL from response:', extractError);
-            console.error('Response object type:', typeof pdfResult);
-            console.error('Response is Error?', pdfResult instanceof Error);
-            console.error('Response keys:', pdfResult && typeof pdfResult === 'object' ? Object.keys(pdfResult) : 'N/A');
+            // Safely log error details without accessing properties that might not exist
+            try {
+              console.error('Error extracting URL from response:', extractError);
+              console.error('Response object type:', typeof pdfResult);
+              if (pdfResult) {
+                console.error('Response is Error?', pdfResult instanceof Error);
+                if (pdfResult && typeof pdfResult === 'object' && !(pdfResult instanceof Error)) {
+                  try {
+                    const keys = Object.keys(pdfResult);
+                    console.error('Response keys:', keys);
+                  } catch (keysError) {
+                    console.error('Could not get response keys:', keysError);
+                  }
+                }
+              } else {
+                console.error('Response is null or undefined');
+              }
+            } catch (logError) {
+              console.error('Error logging extract error details:', logError);
+            }
             // Re-throw with more context
             if (extractError instanceof Error) {
               throw extractError;
             }
-            throw new Error('Failed to extract URL from upload response: ' + (extractError?.message || 'Unknown error'));
+            const errorMsg = (extractError && typeof extractError === 'object' && 'message' in extractError) 
+              ? String(extractError.message) 
+              : 'Unknown error';
+            throw new Error('Failed to extract URL from upload response: ' + errorMsg);
           }
 
           if (!extractedUrl || typeof extractedUrl !== 'string' || extractedUrl.trim() === '') {
-            console.error('PDF upload response missing URL:', pdfResult);
-            console.error('Response type:', typeof pdfResult);
-            console.error('Response keys:', pdfResult && typeof pdfResult === 'object' ? Object.keys(pdfResult) : 'N/A');
+            // Safely log response details without accessing properties that might not exist
+            try {
+              console.error('PDF upload response missing URL');
+              console.error('Response type:', typeof pdfResult);
+              if (pdfResult && typeof pdfResult === 'object' && !(pdfResult instanceof Error)) {
+                try {
+                  const keys = Object.keys(pdfResult);
+                  console.error('Response keys:', keys);
+                } catch (keysError) {
+                  console.error('Could not get response keys:', keysError);
+                }
+                // Try to stringify safely
+                try {
+                  console.error('Response object:', JSON.stringify(pdfResult, null, 2));
+                } catch (stringifyError) {
+                  console.error('Could not stringify response:', stringifyError);
+                }
+              } else {
+                console.error('Response is not a valid object or is an Error');
+              }
+            } catch (logError) {
+              console.error('Error logging response details:', logError);
+            }
             throw new Error('Upload succeeded but no valid URL returned in response. Please check the server response.');
           }
 
@@ -646,13 +685,14 @@ const BookUploadScreen = ({ navigation }) => {
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
         } catch (uploadError) {
           console.error('PDF upload failed:', uploadError);
+          
           // Safely extract error message - NEVER access .url or other properties that might not exist
           let errorMessage = 'Unknown error';
           try {
             if (uploadError) {
               if (typeof uploadError === 'string') {
                 errorMessage = uploadError;
-              } else if (typeof uploadError === 'object' && uploadError !== null) {
+              } else if (typeof uploadError === 'object' && uploadError !== null && !(uploadError instanceof Error)) {
                 // Only access properties that are guaranteed to exist on Error objects
                 if ('message' in uploadError && uploadError.message) {
                   errorMessage = String(uploadError.message);
@@ -666,6 +706,9 @@ const BookUploadScreen = ({ navigation }) => {
                     errorMessage = 'Upload failed';
                   }
                 }
+              } else if (uploadError instanceof Error) {
+                // It's an Error object - safely access message property
+                errorMessage = uploadError.message || 'Upload failed';
               }
             }
           } catch (e) {
@@ -676,18 +719,31 @@ const BookUploadScreen = ({ navigation }) => {
           // Log error type for debugging - use safe property access
           try {
             const errorType = uploadError ? (typeof uploadError) : 'null/undefined';
-            const errorName = (uploadError && typeof uploadError === 'object' && 'name' in uploadError) 
-              ? String(uploadError.name) 
-              : 'N/A';
+            let errorName = 'N/A';
+            if (uploadError) {
+              if (uploadError instanceof Error) {
+                errorName = uploadError.name || 'Error';
+              } else if (typeof uploadError === 'object' && uploadError !== null && 'name' in uploadError) {
+                errorName = String(uploadError.name);
+              }
+            }
             console.error('PDF upload error type:', errorType);
             console.error('PDF upload error name:', errorName);
           } catch (logError) {
             console.error('Error logging error details:', logError);
           }
           
+          // Determine user-friendly error message
+          let userMessage = errorMessage;
+          if (errorMessage.includes('Network') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
+            userMessage = 'Network error: Please check your internet connection and try again.';
+          } else if (errorMessage.includes('Property') && errorMessage.includes("doesn't exist")) {
+            userMessage = 'Upload failed: Invalid response from server. Please try again.';
+          }
+          
           Alert.alert(
             'Upload Error',
-            `PDF upload failed: ${errorMessage}\n\nPlease check your internet connection and try again.`,
+            `PDF upload failed: ${userMessage}`,
             [{ text: 'OK', onPress: () => setIsUploading(false) }]
           );
           return; // Stop the upload process
