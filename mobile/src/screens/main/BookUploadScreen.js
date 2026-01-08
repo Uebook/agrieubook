@@ -563,8 +563,16 @@ const BookUploadScreen = ({ navigation }) => {
             type: pdfFile.type || 'application/pdf',
             name: pdfFile.name || 'book.pdf',
           };
-          const pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
-          console.log('PDF upload result:', pdfResult);
+          let pdfResult;
+          try {
+            pdfResult = await apiClient.uploadFile(fileToUpload, 'books', 'pdfs', userId);
+            console.log('PDF upload result:', pdfResult);
+          } catch (uploadApiError) {
+            // If uploadFile throws an error, re-throw it immediately
+            // Don't try to process it as a result
+            console.error('uploadFile threw an error:', uploadApiError);
+            throw uploadApiError;
+          }
 
           // Validate response structure
           // First check if pdfResult is an Error instance (shouldn't happen, but be safe)
@@ -581,15 +589,24 @@ const BookUploadScreen = ({ navigation }) => {
           }
 
           // Check for error in response first - use 'in' operator to safely check
-          if ('error' in pdfResult && pdfResult.error) {
-            throw new Error(typeof pdfResult.error === 'string' ? pdfResult.error : 'Upload failed');
+          if ('error' in pdfResult) {
+            const errorValue = pdfResult['error'];
+            if (errorValue) {
+              const errorMsg = typeof errorValue === 'string' ? errorValue : 'Upload failed';
+              throw new Error(errorMsg);
+            }
           }
 
           // Check if response has success property and it's false
-          if ('success' in pdfResult && pdfResult.success === false) {
-            const errorMsg = ('error' in pdfResult && pdfResult.error) 
-              ? (typeof pdfResult.error === 'string' ? pdfResult.error : 'Upload failed')
-              : (('message' in pdfResult && pdfResult.message) ? pdfResult.message : 'Upload failed');
+          if ('success' in pdfResult && pdfResult['success'] === false) {
+            let errorMsg = 'Upload failed';
+            if ('error' in pdfResult) {
+              const errorValue = pdfResult['error'];
+              errorMsg = typeof errorValue === 'string' ? errorValue : 'Upload failed';
+            } else if ('message' in pdfResult) {
+              const messageValue = pdfResult['message'];
+              errorMsg = typeof messageValue === 'string' ? messageValue : 'Upload failed';
+            }
             throw new Error(errorMsg);
           }
 
