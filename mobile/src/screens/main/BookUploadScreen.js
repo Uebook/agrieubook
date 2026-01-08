@@ -684,7 +684,22 @@ const BookUploadScreen = ({ navigation }) => {
           currentStep++;
           setUploadProgress(Math.round((currentStep / totalSteps) * 100));
         } catch (uploadError) {
-          console.error('PDF upload failed:', uploadError);
+          // Log error safely - don't try to serialize the error object directly as it might cause issues
+          try {
+            const errorStr = uploadError instanceof Error 
+              ? uploadError.toString() 
+              : String(uploadError);
+            console.error('PDF upload failed:', errorStr);
+            if (uploadError instanceof Error) {
+              console.error('Error message:', uploadError.message);
+              console.error('Error name:', uploadError.name);
+              if (uploadError.stack) {
+                console.error('Error stack:', uploadError.stack);
+              }
+            }
+          } catch (logError) {
+            console.error('PDF upload failed (could not log error details):', logError);
+          }
           
           // Safely extract error message - NEVER access .url or other properties that might not exist
           let errorMessage = 'Unknown error';
