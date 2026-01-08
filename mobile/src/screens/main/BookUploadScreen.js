@@ -652,17 +652,7 @@ const BookUploadScreen = ({ navigation }) => {
           }
         }
 
-        // Ensure PDF was uploaded successfully
-        if (!pdfUrl) {
-          Alert.alert(
-            'Upload Error',
-            'PDF file upload failed. Please try again.',
-            [{ text: 'OK', onPress: () => setIsUploading(false) }]
-          );
-          return;
-        }
-
-        // Step 3: Create book record (PDF and cover images are now required)
+        // Step 3: Create book record (PDF is optional, cover images are required)
         setUploadProgress(Math.round((currentStep / totalSteps) * 100));
         const bookPrice = parseFloat(formData.price) || 0;
         const bookData = {
