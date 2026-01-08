@@ -372,9 +372,33 @@ class ApiClient {
       if (finalUrl) {
         // Return consistent structure with url property
         // Use bracket notation and 'in' operator to safely access all properties
-        const pathValue = ('path' in result && result.path) ? result.path : null;
-        const publicUrlValue = ('publicUrl' in result && result.publicUrl) ? result.publicUrl : finalUrl;
-        const signedUrlValue = ('signedUrl' in result && result.signedUrl) ? result.signedUrl : null;
+        let pathValue = null;
+        let publicUrlValue = finalUrl;
+        let signedUrlValue = null;
+        
+        try {
+          if ('path' in result) {
+            pathValue = result['path'] || null;
+          }
+        } catch (e) {
+          console.warn('Could not access result.path:', e);
+        }
+        
+        try {
+          if ('publicUrl' in result) {
+            publicUrlValue = result['publicUrl'] || finalUrl;
+          }
+        } catch (e) {
+          console.warn('Could not access result.publicUrl:', e);
+        }
+        
+        try {
+          if ('signedUrl' in result) {
+            signedUrlValue = result['signedUrl'] || null;
+          }
+        } catch (e) {
+          console.warn('Could not access result.signedUrl:', e);
+        }
         
         return {
           success: true,
