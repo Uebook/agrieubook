@@ -741,7 +741,7 @@ const HomeScreen = ({ navigation }) => {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>My Uploaded Books</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('BookStore')}>
+                <TouchableOpacity onPress={() => navigation.navigate('MyBooks', { initialTab: 'books' })}>
                   <Text style={styles.seeAll}>See All</Text>
                 </TouchableOpacity>
               </View>
@@ -769,7 +769,7 @@ const HomeScreen = ({ navigation }) => {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>My Audio Books</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('BookStore')}>
+                <TouchableOpacity onPress={() => navigation.navigate('MyBooks', { initialTab: 'audio' })}>
                   <Text style={styles.seeAll}>See All</Text>
                 </TouchableOpacity>
               </View>

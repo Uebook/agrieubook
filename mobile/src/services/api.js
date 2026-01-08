@@ -248,15 +248,23 @@ class ApiClient {
       });
       
       // Send FormData - React Native handles file reading and sending automatically
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
-        headers: {
-          // Explicitly allow all headers for CORS
-          'Accept': '*/*',
-        },
-      });
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          body: formData,
+          // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
+          headers: {
+            // Explicitly allow all headers for CORS
+            'Accept': '*/*',
+          },
+        });
+      } catch (fetchError) {
+        // Network error - fetch failed completely
+        console.error('Network error during fetch:', fetchError);
+        const networkErrorMessage = fetchError?.message || 'Network request failed';
+        throw new Error(`Network error: ${networkErrorMessage}. Please check your internet connection and try again.`);
+      }
 
       console.log('Upload response:', { status: response.status, statusText: response.statusText });
 
@@ -363,10 +371,13 @@ class ApiClient {
       
       // If it's a network error, provide a more helpful message
       if (isNetworkError) {
-        throw new Error(`Network error: Unable to reach upload server at ${url}. Please check your internet connection and try again.`);
+        throw new Error(`Network error: Unable to reach upload server. Please check your internet connection and try again.`);
       }
       
-      throw error;
+      // For other errors, create a new Error with a safe message
+      // Never re-throw the original error as it might have unexpected properties
+      const safeErrorMessage = errorMessage || 'Upload failed. Please try again.';
+      throw new Error(safeErrorMessage);
     }
   }
 

@@ -25,6 +25,7 @@ import NotificationsScreen from '../screens/main/NotificationsScreen';
 import AudioBookScreen from '../screens/main/AudioBookScreen';
 import GovernmentCurriculumScreen from '../screens/main/GovernmentCurriculumScreen';
 import EditBookScreen from '../screens/main/EditBookScreen';
+import MyBooksScreen from '../screens/main/MyBooksScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -114,6 +115,10 @@ const MainStack = () => {
       <Stack.Screen 
         name="EditBook" 
         component={EditBookScreen}
+      />
+      <Stack.Screen 
+        name="MyBooks" 
+        component={MyBooksScreen}
       />
     </Stack.Navigator>
   );
