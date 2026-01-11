@@ -288,7 +288,6 @@ export default function YouTubeChannelsPage() {
                                     ))}
                                 </tbody>
                             </table>
-                            </div>
                             {pagination.totalPages > 0 && (
                                 <Pagination
                                     currentPage={pagination.page}
@@ -299,6 +298,7 @@ export default function YouTubeChannelsPage() {
                                     onItemsPerPageChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
                                 />
                             )}
+                            </div>
                         )}
                     </div>
                 </main>
