@@ -11,10 +11,7 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = 'https://isndoxsyjbdzibhkrisj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlzbmRveHN5amJkemliaGtyaXNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1ODg4NTEsImV4cCI6MjA4MzE2NDg1MX0.xAhUBZ-5NCySy6QmF0DheBZaeFZRBBtnHRDHYcpQglo';
 
-// Always try to create Supabase client - fail gracefully if it doesn't work
-let supabase = null;
-
-// Validate that we have real credentials (not placeholders)
+// Validate credentials
 const PLACEHOLDER_URL = 'https://YOUR_PROJECT_ID.supabase.co';
 const PLACEHOLDER_KEY = 'YOUR_PUBLIC_ANON_KEY';
 
@@ -26,43 +23,49 @@ const hasValidKey = SUPABASE_ANON_KEY &&
   SUPABASE_ANON_KEY !== PLACEHOLDER_KEY &&
   SUPABASE_ANON_KEY.length > 50;
 
-console.log('🔍 Supabase Config Check:', {
-  hasValidUrl,
-  hasValidKey,
-  url: SUPABASE_URL?.substring(0, 40) + '...',
-  keyLength: SUPABASE_ANON_KEY?.length,
-  urlValue: SUPABASE_URL,
-  keyValue: SUPABASE_ANON_KEY?.substring(0, 20) + '...',
-});
+// Create Supabase client - always create if credentials are valid
+let supabase = null;
 
 if (hasValidUrl && hasValidKey) {
   try {
-    console.log('🔧 Creating Supabase client...');
+    console.log('🔧 Initializing Supabase client with:', {
+      url: SUPABASE_URL,
+      keyLength: SUPABASE_ANON_KEY.length,
+    });
+    
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    console.log('✅ Supabase client created successfully');
-    console.log('✅ Supabase client object:', !!supabase, typeof supabase);
+    
+    // Verify client was created
+    if (supabase) {
+      console.log('✅ Supabase client initialized successfully');
+      console.log('✅ Client type:', typeof supabase);
+      console.log('✅ Client has storage:', !!supabase.storage);
+    } else {
+      console.error('❌ Supabase client is null after creation');
+    }
   } catch (error) {
-    console.error('❌ Error creating Supabase client:', error);
-    console.error('Error message:', error?.message);
-    console.error('Error stack:', error?.stack);
+    console.error('❌ CRITICAL: Failed to create Supabase client:', error);
+    console.error('Error details:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack?.substring(0, 200),
+    });
     supabase = null;
   }
 } else {
-  console.warn('⚠️ Supabase credentials validation failed:', {
+  console.error('❌ CRITICAL: Supabase credentials are invalid:', {
     hasValidUrl,
     hasValidKey,
-    urlCheck: SUPABASE_URL !== PLACEHOLDER_URL,
-    urlStartsWithHttps: SUPABASE_URL?.startsWith('https://'),
-    keyCheck: SUPABASE_ANON_KEY !== PLACEHOLDER_KEY,
+    url: SUPABASE_URL,
     keyLength: SUPABASE_ANON_KEY?.length,
   });
 }
 
-// Log final state
-console.log('📊 Final Supabase state:', {
-  supabaseIsNull: supabase === null,
-  supabaseExists: !!supabase,
-  supabaseType: typeof supabase,
-});
+// Final verification
+if (!supabase) {
+  console.error('❌ CRITICAL: Supabase client is NULL - profile image uploads will fail!');
+} else {
+  console.log('✅ Supabase client is ready for use');
+}
 
 export default supabase;
