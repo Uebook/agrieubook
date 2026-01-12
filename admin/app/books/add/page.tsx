@@ -7,6 +7,8 @@ import Header from '@/components/Header';
 import apiClient from '@/lib/api/client';
 import { compressImage } from '@/lib/utils/imageCompression';
 
+// Categories are now fetched from database - no hardcoded values
+
 export default function AddBookPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
