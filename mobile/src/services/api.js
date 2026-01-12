@@ -358,10 +358,11 @@ class ApiClient {
     
     try {
       // Use XMLHttpRequest for FormData (more reliable for file uploads)
+      // Use POST instead of PUT for better React Native compatibility
       const response = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         
-        xhr.open('PUT', url);
+        xhr.open('POST', url);
         xhr.setRequestHeader('Accept', '*/*');
         // Do NOT set Content-Type - let React Native FormData set it automatically
         
@@ -422,7 +423,7 @@ class ApiClient {
         
         xhr.timeout = 90000; // 90 seconds
         
-        console.log('📡 Sending XMLHttpRequest PUT request to:', url);
+        console.log('📡 Sending XMLHttpRequest POST request to:', url);
         // Send FormData
         xhr.send(formData);
       });
@@ -461,7 +462,7 @@ class ApiClient {
         console.warn('⚠️ XMLHttpRequest failed, trying fetch...');
         try {
           const fetchResponse = await fetch(url, {
-            method: 'PUT',
+            method: 'POST',
             body: formData,
             headers: {
               'Accept': '*/*',

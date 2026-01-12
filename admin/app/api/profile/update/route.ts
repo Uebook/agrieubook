@@ -23,7 +23,16 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 // PUT /api/profile/update - Update user profile with FormData (supports file upload)
+// Also support POST for better React Native compatibility
 export async function PUT(request: NextRequest) {
+  return handleProfileUpdate(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleProfileUpdate(request);
+}
+
+async function handleProfileUpdate(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || '';
     
@@ -264,7 +273,7 @@ export async function PUT(request: NextRequest) {
     
     return response;
   } catch (error: any) {
-    console.error('Error in PUT /api/profile/update:', error);
+    console.error('Error in profile update:', error);
     const errorResponse = NextResponse.json(
       {
         success: false,
