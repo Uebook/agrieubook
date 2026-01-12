@@ -267,12 +267,11 @@ class ApiClient {
     });
   }
 
-  // Update profile with FormData (supports file upload)
-  // Uses XMLHttpRequest for file uploads (more reliable in React Native) with axios fallback
+  // Update profile with FormData (supports file upload) - Using axios
   async updateProfile(formData) {
     const url = `${this.baseUrl}/api/profile/update`;
     
-    console.log('📤 Updating profile:', {
+    console.log('📤 Updating profile with axios:', {
       url,
       baseUrl: this.baseUrl,
       hasFormData: !!formData,
@@ -298,123 +297,74 @@ class ApiClient {
       })));
     }
     
-    // First, test connectivity with an OPTIONS request (CORS preflight)
     try {
-      console.log('🔍 Testing endpoint connectivity...');
-      await axios.options(url, {
-        timeout: 5000,
-        validateStatus: () => true, // Don't throw on any status
-      });
-      console.log('✅ Endpoint is reachable');
-    } catch (testError) {
-      console.warn('⚠️ Connectivity test failed, but continuing anyway:', testError.message);
-    }
-    
-    try {
-      // Use XMLHttpRequest for FormData with files (more reliable in React Native)
-      // React Native's XMLHttpRequest handles FormData with file URIs better than axios
-      const response = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        
-        xhr.open('POST', url);
-        xhr.setRequestHeader('Accept', '*/*');
-        // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
-        
-        xhr.onload = () => {
-          const responseText = xhr.responseText;
-          
-          console.log('✅ XMLHttpRequest completed:', {
-            status: xhr.status,
-            statusText: xhr.statusText,
-            responseLength: responseText?.length,
-          });
-          
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const data = JSON.parse(responseText);
-              resolve(data);
-            } catch (parseError) {
-              reject(new Error('Invalid JSON response from server'));
-            }
-          } else {
-            let errorData;
-            try {
-              errorData = JSON.parse(responseText);
-            } catch (parseError) {
-              errorData = { error: responseText || 'Request failed' };
-            }
-            const error = new Error(errorData.error || errorData.message || `HTTP error! status: ${xhr.status}`);
-            error.status = xhr.status;
-            error.details = errorData.details;
-            reject(error);
-          }
-        };
-        
-        xhr.onerror = (error) => {
-          console.error('❌ XMLHttpRequest onerror:', {
-            readyState: xhr.readyState,
-            status: xhr.status,
-            statusText: xhr.statusText,
-            responseText: xhr.responseText?.substring(0, 200),
-            error: error,
-          });
-          reject(new Error('Network request failed - XMLHttpRequest error'));
-        };
-        
-        xhr.ontimeout = () => {
-          console.error('❌ XMLHttpRequest timeout after 90s');
-          reject(new Error('Request timeout'));
-        };
-        
-        xhr.timeout = 90000; // 90 seconds
-        
-        console.log('📡 Sending XMLHttpRequest POST request to:', url);
-        xhr.send(formData);
+      // Use axios for FormData uploads
+      const response = await axios.post(url, formData, {
+        headers: {
+          'Accept': '*/*',
+          // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
+        },
+        timeout: 90000, // 90 seconds timeout
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
       });
       
-      console.log('✅ Profile update successful');
-      return response;
-    } catch (xhrError) {
-      console.warn('⚠️ XMLHttpRequest failed, trying axios fallback...', xhrError.message);
+      console.log('✅ Axios request completed:', {
+        status: response.status,
+        statusText: response.statusText,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+      });
       
-      // Fallback to axios if XMLHttpRequest fails
-      try {
-        const response = await axios.post(url, formData, {
-          headers: {
-            'Accept': '*/*',
-            // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
-          },
-          timeout: 90000,
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
+      return response.data;
+    } catch (error) {
+      console.error('❌ Profile update error (axios):', error);
+      
+      // Enhanced error logging
+      if (error.response) {
+        // Server responded with error status
+        console.error('❌ Server error response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
         });
         
-        console.log('✅ Axios fallback successful');
-        return response.data;
-      } catch (axiosError) {
-        console.error('❌ Both XMLHttpRequest and axios failed');
+        const errorData = error.response.data || {};
+        const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${error.response.status}`;
+        const axiosError = new Error(errorMessage);
+        axiosError.status = error.response.status;
+        axiosError.details = errorData.details;
+        throw axiosError;
+      } else if (error.request) {
+        // Request was made but no response received
+        console.error('❌ No response received:', {
+          url: url,
+          baseUrl: this.baseUrl,
+          usingLocalServer: USE_LOCAL_SERVER,
+          isDev: __DEV__,
+          errorCode: error.code,
+          errorMessage: error.message,
+        });
         
-        if (axiosError.response) {
-          const errorData = axiosError.response.data || {};
-          const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${axiosError.response.status}`;
-          const error = new Error(errorMessage);
-          error.status = axiosError.response.status;
-          error.details = errorData.details;
-          throw error;
-        } else if (axiosError.request || xhrError.message.includes('Network')) {
-          throw new Error(
-            `Network error: Cannot reach ${url}\n\n` +
-            `Please check:\n` +
-            `1. Internet connection\n` +
-            `2. If ${this.baseUrl} is accessible\n` +
-            `3. API server status\n\n` +
-            `Current config: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}`
-          );
-        } else if (axiosError.code === 'ECONNABORTED') {
-          throw new Error(`Request timeout: ${url}. The request took too long (90s).`);
-        }
+        throw new Error(
+          `Network error: Cannot reach ${url}\n\n` +
+          `Please check:\n` +
+          `1. Internet connection\n` +
+          `2. If ${this.baseUrl} is accessible\n` +
+          `3. API server status\n\n` +
+          `Current config: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}`
+        );
+      } else if (error.code === 'ECONNABORTED') {
+        throw new Error(`Request timeout: ${url}. The request took too long (90s).`);
+      } else {
+        // Error setting up the request
+        console.error('❌ Request setup error:', {
+          message: error.message,
+          url: url,
+          baseUrl: this.baseUrl,
+          stack: error.stack,
+        });
         
-        throw xhrError; // Throw the original XMLHttpRequest error
+        throw error;
       }
     }
   }
@@ -619,170 +569,77 @@ class ApiClient {
     }
 
     try {
-      // Use XMLHttpRequest for file uploads (more reliable in React Native)
-      // React Native's XMLHttpRequest handles FormData with file URIs better than axios
-      const result = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        
-        xhr.open('POST', url);
-        xhr.setRequestHeader('Accept', '*/*');
-        // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
-        
-        xhr.onload = () => {
-          const responseText = xhr.responseText;
-          
-          console.log(`✅ XMLHttpRequest completed (attempt ${retryCount + 1}):`, {
-            status: xhr.status,
-            statusText: xhr.statusText,
-            responseLength: responseText?.length,
-          });
-          
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const data = JSON.parse(responseText);
-              
-              // Check for error in response body
-              if (data.error) {
-                reject(new Error(data.error));
-                return;
-              }
-
-              // Extract URL - API should always return { success: true, url: string }
-              const uploadUrl = data.url || data.publicUrl || data.signedUrl;
-              
-              if (!uploadUrl || typeof uploadUrl !== 'string') {
-                console.error('❌ No URL in response:', JSON.stringify(data, null, 2));
-                reject(new Error('Upload succeeded but no URL returned. Please try again.'));
-                return;
-              }
-
-              console.log('✅ Upload successful, URL:', uploadUrl.substring(0, 50) + '...');
-
-              // Return consistent structure
-              resolve({
-                success: true,
-                url: uploadUrl,
-                path: data.path || null,
-                publicUrl: data.publicUrl || uploadUrl,
-                signedUrl: data.signedUrl || null,
-              });
-            } catch (parseError) {
-              reject(new Error('Invalid JSON response from server'));
-            }
-          } else {
-            let errorData;
-            try {
-              errorData = JSON.parse(responseText);
-            } catch (parseError) {
-              errorData = { error: responseText || 'Request failed' };
-            }
-            
-            const errorMsg = errorData.error || errorData.message || `Upload failed with status ${xhr.status}`;
-            
-            // Retry on 5xx errors (server errors) if we have retries left
-            if (xhr.status >= 500 && retryCount < MAX_RETRIES) {
-              console.log(`🔄 Server error ${xhr.status}, will retry... (${retryCount + 1}/${MAX_RETRIES})`);
-              // Don't reject here, let the retry logic handle it
-              const retryError = new Error(errorMsg);
-              retryError.status = xhr.status;
-              retryError.retryable = true;
-              reject(retryError);
-              return;
-            }
-            
-            const error = new Error(errorMsg);
-            error.status = xhr.status;
-            reject(error);
-          }
-        };
-        
-        xhr.onerror = (error) => {
-          console.error('❌ XMLHttpRequest onerror:', {
-            readyState: xhr.readyState,
-            status: xhr.status,
-            statusText: xhr.statusText,
-            responseText: xhr.responseText?.substring(0, 200),
-            error: error,
-          });
-          
-          const networkError = new Error('Network request failed - XMLHttpRequest error');
-          networkError.retryable = true;
-          reject(networkError);
-        };
-        
-        xhr.ontimeout = () => {
-          console.error('❌ XMLHttpRequest timeout after 90s');
-          const timeoutError = new Error('Request timeout');
-          timeoutError.retryable = true;
-          reject(timeoutError);
-        };
-        
-        xhr.timeout = 90000; // 90 seconds
-        
-        console.log('📡 Sending XMLHttpRequest POST request to:', url);
-        xhr.send(formData);
+      // Use axios for file uploads
+      const response = await axios.post(url, formData, {
+        headers: {
+          'Accept': '*/*',
+          // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
+        },
+        timeout: 90000, // 90 seconds timeout for large files
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
       });
       
-      return result;
+      console.log(`✅ Upload successful (attempt ${retryCount + 1}):`, {
+        status: response.status,
+        hasData: !!response.data,
+      });
+
+      const result = response.data;
+
+      // Check for error in response body
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Extract URL - API should always return { success: true, url: string }
+      const uploadUrl = result.url || result.publicUrl || result.signedUrl;
+      
+      if (!uploadUrl || typeof uploadUrl !== 'string') {
+        console.error('❌ No URL in response:', JSON.stringify(result, null, 2));
+        throw new Error('Upload succeeded but no URL returned. Please try again.');
+      }
+
+      console.log('✅ Upload successful, URL:', uploadUrl.substring(0, 50) + '...');
+
+      // Return consistent structure
+      return {
+        success: true,
+        url: uploadUrl,
+        path: result.path || null,
+        publicUrl: result.publicUrl || uploadUrl,
+        signedUrl: result.signedUrl || null,
+      };
     } catch (error) {
       console.error(`❌ Upload error (attempt ${retryCount + 1}):`, error);
       
-      // Retry logic for retryable errors
-      const isRetryable = error.retryable || 
-                         error.message?.includes('Network request failed') || 
-                         error.message?.includes('timeout') ||
-                         error.message?.includes('Cannot reach') ||
-                         (error.status && error.status >= 500);
-      
-      if (isRetryable && retryCount < MAX_RETRIES) {
-        console.log(`🔄 Retryable error detected, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-        return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
-      }
-      
-      // If XMLHttpRequest fails, try axios as fallback
-      if (error.message?.includes('XMLHttpRequest') || error.message?.includes('Network request failed')) {
-        console.warn('⚠️ XMLHttpRequest failed, trying axios fallback...');
-        try {
-          const response = await axios.post(url, formData, {
-            headers: {
-              'Accept': '*/*',
-              // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
-            },
-            timeout: 90000,
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-          });
-          
-          const result = response.data;
-          
-          if (result.error) {
-            throw new Error(result.error);
-          }
-
-          const uploadUrl = result.url || result.publicUrl || result.signedUrl;
-          
-          if (!uploadUrl || typeof uploadUrl !== 'string') {
-            throw new Error('Upload succeeded but no URL returned. Please try again.');
-          }
-
-          console.log('✅ Axios fallback successful, URL:', uploadUrl.substring(0, 50) + '...');
-
-          return {
-            success: true,
-            url: uploadUrl,
-            path: result.path || null,
-            publicUrl: result.publicUrl || uploadUrl,
-            signedUrl: result.signedUrl || null,
-          };
-        } catch (axiosError) {
-          console.error('❌ Axios fallback also failed:', axiosError);
-          // Continue to throw the original error
+      // Handle axios errors
+      if (error.response) {
+        // Server responded with error status
+        const result = error.response.data || {};
+        const errorMsg = result.error || result.message || `Upload failed with status ${error.response.status}`;
+        
+        // Retry on 5xx errors (server errors) if we have retries left
+        if (error.response.status >= 500 && retryCount < MAX_RETRIES) {
+          console.log(`🔄 Server error ${error.response.status}, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
         }
-      }
-      
-      // Provide user-friendly error messages
-      if (error.message && (error.message.includes('Network request failed') || error.message.includes('Cannot reach'))) {
+        
+        throw new Error(errorMsg);
+      } else if (error.request) {
+        // Request was made but no response received
+        const isRetryable = error.code === 'ECONNABORTED' || 
+                          error.message?.includes('Network request failed') || 
+                          error.message?.includes('timeout') ||
+                          error.message?.includes('Cannot reach');
+        
+        if (isRetryable && retryCount < MAX_RETRIES) {
+          console.log(`🔄 Network error, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+        }
+        
         const diagnosticMsg = `Network error: Cannot reach ${this.baseUrl}/api/upload\n\n` +
           `Current configuration: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}\n\n` +
           `Troubleshooting:\n` +
@@ -795,6 +652,14 @@ class ApiClient {
               `   - Make sure admin server is running: cd admin && npm run dev\n`
             : `3. For Vercel: Verify https://admin-orcin-omega.vercel.app is accessible\n`)
         throw new Error(diagnosticMsg);
+      } else if (error.code === 'ECONNABORTED') {
+        // Timeout
+        if (retryCount < MAX_RETRIES) {
+          console.log(`⏳ Upload timeout, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+        }
+        throw new Error(`Upload timeout: The request took too long. URL: ${url}`);
       }
       
       throw error;
