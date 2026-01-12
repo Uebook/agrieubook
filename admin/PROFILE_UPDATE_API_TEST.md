@@ -16,10 +16,13 @@
 
 | Parameter | Type | Description | Example |
 |-----------|------|-------------|---------|
-| `user_id` | Text/String | User ID (required if `author_id` not provided) | `1231` |
-| `author_id` | Text/String | Author ID (alternative to `user_id`) | `1231` |
+| `user_id` | UUID String | User ID in UUID format (required if `author_id` not provided) | `550e8400-e29b-41d4-a716-446655440000` |
+| `author_id` | UUID String | Author ID in UUID format (alternative to `user_id`) | `550e8400-e29b-41d4-a716-446655440000` |
 
-**Note:** Either `user_id` OR `author_id` must be provided.
+**Note:** 
+- Either `user_id` OR `author_id` must be provided.
+- **IMPORTANT:** Both `user_id` and `author_id` must be in **UUID format** (e.g., `550e8400-e29b-41d4-a716-446655440000`), not plain numbers like `1231`.
+- To get a valid user ID, query your users table in Supabase or use the `/api/users` endpoint.
 
 ### Optional Parameters
 
@@ -55,7 +58,8 @@ Add the following fields:
 ```
 Key: user_id
 Type: Text
-Value: 1231
+Value: 550e8400-e29b-41d4-a716-446655440000
+(Note: Must be a valid UUID, not a plain number)
 
 Key: full_name
 Type: Text
@@ -112,7 +116,7 @@ Value: [Select an image file from your computer]
 
 ```bash
 curl -X POST https://admin-orcin-omega.vercel.app/api/profile/update \
-  -F "user_id=1231" \
+  -F "user_id=550e8400-e29b-41d4-a716-446655440000" \
   -F "full_name=John Doe" \
   -F "email=john@example.com" \
   -F "phone=+1234567890" \
@@ -124,11 +128,13 @@ curl -X POST https://admin-orcin-omega.vercel.app/api/profile/update \
   -F "website=https://johndoe.com"
 ```
 
+**Note:** Replace `550e8400-e29b-41d4-a716-446655440000` with an actual UUID from your users table.
+
 ### With Profile Picture
 
 ```bash
 curl -X POST https://admin-orcin-omega.vercel.app/api/profile/update \
-  -F "user_id=1231" \
+  -F "user_id=550e8400-e29b-41d4-a716-446655440000" \
   -F "full_name=John Doe" \
   -F "email=john@example.com" \
   -F "phone=+1234567890" \
@@ -140,6 +146,8 @@ curl -X POST https://admin-orcin-omega.vercel.app/api/profile/update \
   -F "website=https://johndoe.com" \
   -F "profile_picture=@/path/to/your/image.jpg"
 ```
+
+**Note:** Replace `550e8400-e29b-41d4-a716-446655440000` with an actual UUID from your users table.
 
 **Note:** Replace `/path/to/your/image.jpg` with the actual path to your image file.
 
@@ -179,6 +187,16 @@ curl -X POST https://admin-orcin-omega.vercel.app/api/profile/update \
 ```json
 {
   "error": "Missing user_id or author_id"
+}
+```
+
+#### Invalid UUID Format (400 Bad Request)
+
+```json
+{
+  "success": false,
+  "error": "Invalid user_id or author_id format",
+  "details": "Expected UUID format (e.g., \"550e8400-e29b-41d4-a716-446655440000\"), but received: \"1222\". The user_id must be a valid UUID."
 }
 ```
 
@@ -309,15 +327,17 @@ Access-Control-Allow-Headers: Content-Type, Accept, Authorization
 
 ```bash
 curl -X POST https://admin-orcin-omega.vercel.app/api/profile/update \
-  -F "user_id=1231" \
+  -F "user_id=550e8400-e29b-41d4-a716-446655440000" \
   -F "full_name=Test User"
 ```
+
+**Note:** Replace the UUID with an actual user ID from your database.
 
 ### Full Profile Update
 
 ```bash
 curl -X POST https://admin-orcin-omega.vercel.app/api/profile/update \
-  -F "user_id=1231" \
+  -F "user_id=550e8400-e29b-41d4-a716-446655440000" \
   -F "full_name=John Doe" \
   -F "email=john@example.com" \
   -F "phone=+1234567890" \
@@ -333,10 +353,28 @@ curl -X POST https://admin-orcin-omega.vercel.app/api/profile/update \
 
 ```bash
 curl -X POST https://admin-orcin-omega.vercel.app/api/profile/update \
-  -F "user_id=1231" \
+  -F "user_id=550e8400-e29b-41d4-a716-446655440000" \
   -F "full_name=John Doe" \
   -F "profile_picture=@/Users/yourname/Desktop/profile.jpg"
 ```
+
+## How to Get a Valid User ID
+
+Since `user_id` must be a UUID, you need to get it from your database:
+
+### Option 1: Query Supabase Database
+
+```sql
+SELECT id, name, email FROM users LIMIT 5;
+```
+
+### Option 2: Use the Users API
+
+```bash
+curl https://admin-orcin-omega.vercel.app/api/users
+```
+
+This will return a list of users with their UUIDs.
 
 ---
 

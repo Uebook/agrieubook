@@ -74,6 +74,23 @@ async function handleProfileUpdate(request: NextRequest) {
       return errorResponse;
     }
     
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(targetUserId)) {
+      const errorResponse = NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid user_id or author_id format',
+          details: `Expected UUID format (e.g., "550e8400-e29b-41d4-a716-446655440000"), but received: "${targetUserId}". The user_id must be a valid UUID.`,
+        },
+        { status: 400 }
+      );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
+    }
+    
     console.log('📝 Profile update request:', {
       userId: targetUserId,
       hasFullName: !!fullName,
