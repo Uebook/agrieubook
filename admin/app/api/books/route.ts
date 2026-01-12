@@ -453,11 +453,11 @@ export async function POST(request: NextRequest) {
           console.log('📸 Cover image file details:', {
             isFile: coverImageFile instanceof File,
             isBlob: coverImageFile instanceof Blob,
-            type: typeof coverImageFile,
+            typeOf: typeof coverImageFile,
             constructor: coverImageFile?.constructor?.name,
             name: coverFileAny?.name,
             size: coverFileAny?.size,
-            type: coverFileAny?.type,
+            mimeType: coverFileAny?.type,
             hasArrayBuffer: typeof coverFileAny?.arrayBuffer === 'function',
             keys: Object.keys(coverFileAny || {}),
           });
@@ -468,11 +468,11 @@ export async function POST(request: NextRequest) {
           console.log('📄 PDF file details:', {
             isFile: pdfFile instanceof File,
             isBlob: pdfFile instanceof Blob,
-            type: typeof pdfFile,
+            typeOf: typeof pdfFile,
             constructor: pdfFile?.constructor?.name,
             name: pdfFileAny?.name,
             size: pdfFileAny?.size,
-            type: pdfFileAny?.type,
+            mimeType: pdfFileAny?.type,
             hasArrayBuffer: typeof pdfFileAny?.arrayBuffer === 'function',
             keys: Object.keys(pdfFileAny || {}),
           });
@@ -516,7 +516,7 @@ export async function POST(request: NextRequest) {
       }
       
       // Upload cover image if provided (optional)
-      if (coverImageFile && coverImageFile !== null && coverImageFile !== 'null' && coverImageFile !== 'undefined') {
+      if (coverImageFile && coverImageFile instanceof File) {
         try {
           console.log('📤 Uploading cover image...');
           const coverImageFileName = (coverImageFile as any)?.name || `cover_${Date.now()}.jpg`;
@@ -540,7 +540,7 @@ export async function POST(request: NextRequest) {
       }
       
       // Upload PDF if provided (optional)
-      if (pdfFile && pdfFile !== null && pdfFile !== 'null' && pdfFile !== 'undefined') {
+      if (pdfFile && pdfFile instanceof File) {
         try {
           console.log('📤 Uploading PDF...');
           const pdfFileName = (pdfFile as any)?.name || `book_${Date.now()}.pdf`;
