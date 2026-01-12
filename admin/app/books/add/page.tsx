@@ -27,26 +27,31 @@ export default function AddBookPage() {
   const [pdfPreview, setPdfPreview] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [authors, setAuthors] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const categories = [
-    { id: '1', name: 'Organic Farming' },
-    { id: '2', name: 'Crop Management' },
-    { id: '3', name: 'Livestock' },
-    { id: '4', name: 'Agricultural Technology' },
-  ];
-
-  // Fetch authors on mount
+  // Fetch authors and categories on mount
   useEffect(() => {
-    const fetchAuthors = async () => {
+    const fetchData = async () => {
       try {
-        const response = await apiClient.getAuthors();
-        setAuthors(response.authors || []);
+        // Fetch authors
+        const authorsResponse = await apiClient.getAuthors();
+        setAuthors(authorsResponse.authors || []);
       } catch (error) {
         console.error('Error fetching authors:', error);
       }
+
+      try {
+        // Fetch categories from database
+        const categoriesResponse = await apiClient.getCategories({ limit: 100 });
+        setCategories(categoriesResponse.categories || []);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        // Fallback to empty array if fetch fails
+        setCategories([]);
+      }
     };
-    fetchAuthors();
+    fetchData();
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -220,8 +225,11 @@ export default function AddBookPage() {
                     onChange={handleInputChange}
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    disabled={categories.length === 0}
                   >
-                    <option value="">Select Category</option>
+                    <option value="">
+                      {categories.length === 0 ? 'Loading categories...' : 'Select Category'}
+                    </option>
                     {categories.map(cat => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
