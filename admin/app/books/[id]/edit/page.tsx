@@ -164,12 +164,20 @@ export default function BookEditPage({ params }: { params: Promise<{ id: string 
         }
       }
 
-      // Step 2: Upload new cover images if provided
+      // Step 2: Upload new cover images if provided (with compression)
       if (coverImages.length > 0) {
         setUploadProgress(30);
         for (let i = 0; i < coverImages.length; i++) {
           try {
-            const coverResult = await apiClient.uploadFile(coverImages[i], 'books', 'covers');
+            // Compress image before upload to avoid 413 errors
+            const { compressImage } = await import('@/lib/utils/imageCompression');
+            const compressedImage = await compressImage(coverImages[i], {
+              maxWidth: 1200,
+              maxHeight: 1200,
+              quality: 0.7,
+              maxSizeMB: 2,
+            });
+            const coverResult = await apiClient.uploadFile(compressedImage, 'books', 'covers');
             const coverUrl = coverResult.url || coverResult.path;
             coverImageUrls.push(coverUrl);
             setUploadProgress(30 + (i + 1) * (50 / coverImages.length));

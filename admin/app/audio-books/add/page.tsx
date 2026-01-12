@@ -122,29 +122,43 @@ export default function AddAudioBookPage() {
       const audioUploadResult = await uploadResponse.json();
       const audioUrl = audioUploadResult.url || audioUploadResult.path;
 
-      // Step 2: Upload cover images
+      // Step 2: Upload cover images (with compression)
       setUploadProgress(30);
       const coverImageUrls: string[] = [];
       for (let i = 0; i < coverImages.length; i++) {
-        const imageFormData = new FormData();
-        imageFormData.append('file', coverImages[i]);
-        imageFormData.append('bucket', 'books'); // Use existing 'books' bucket
-        imageFormData.append('folder', 'audio-books/covers'); // Organize in audio-books subfolder
-        imageFormData.append('fileName', coverImages[i].name);
-        imageFormData.append('fileType', coverImages[i].type || 'image/jpeg');
-        
-        const coverUploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
-          method: 'POST',
-          body: imageFormData,
-        });
-        
-        if (!coverUploadResponse.ok) {
-          throw new Error('Failed to upload cover image');
+        try {
+          // Compress image before upload to avoid 413 errors
+          const { compressImage } = await import('@/lib/utils/imageCompression');
+          const compressedImage = await compressImage(coverImages[i], {
+            maxWidth: 1200,
+            maxHeight: 1200,
+            quality: 0.7,
+            maxSizeMB: 2,
+          });
+          
+          const imageFormData = new FormData();
+          imageFormData.append('file', compressedImage);
+          imageFormData.append('bucket', 'books'); // Use existing 'books' bucket
+          imageFormData.append('folder', 'audio-books/covers'); // Organize in audio-books subfolder
+          imageFormData.append('fileName', compressedImage.name);
+          imageFormData.append('fileType', compressedImage.type || 'image/jpeg');
+          
+          const coverUploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
+            method: 'POST',
+            body: imageFormData,
+          });
+          
+          if (!coverUploadResponse.ok) {
+            throw new Error('Failed to upload cover image');
+          }
+          
+          const coverResult = await coverUploadResponse.json();
+          coverImageUrls.push(coverResult.url || coverResult.path);
+          setUploadProgress(30 + (i + 1) * (50 / coverImages.length));
+        } catch (uploadError: any) {
+          console.error(`Cover image ${i + 1} upload error:`, uploadError);
+          // Continue with other images even if one fails
         }
-        
-        const coverResult = await coverUploadResponse.json();
-        coverImageUrls.push(coverResult.url || coverResult.path);
-        setUploadProgress(30 + (i + 1) * (50 / coverImages.length));
       }
 
       // Step 3: Create audio book record

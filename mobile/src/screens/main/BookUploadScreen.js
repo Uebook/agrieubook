@@ -194,10 +194,11 @@ const BookUploadScreen = ({ navigation }) => {
 
     try {
       const img = await ImagePicker.openCamera({
-        width: 600,
-        height: 600,
+        width: 1200,
+        height: 1200,
         cropping: true,
-        compressImageQuality: 0.8,
+        compressImageQuality: 0.6, // Reduced from 0.8 to 0.6 for better compression
+        maxFiles: 1,
       });
       setCoverImageUri(img.path || '');
       setCoverImageFile({
@@ -223,10 +224,11 @@ const BookUploadScreen = ({ navigation }) => {
 
     try {
       const img = await ImagePicker.openPicker({
-        width: 600,
-        height: 600,
+        width: 1200,
+        height: 1200,
         cropping: true,
-        compressImageQuality: 0.8,
+        compressImageQuality: 0.6, // Reduced from 0.8 to 0.6 for better compression
+        maxFiles: 1,
       });
       setCoverImageUri(img.path || '');
       setCoverImageFile({

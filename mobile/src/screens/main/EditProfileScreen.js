@@ -42,8 +42,8 @@ const EditProfileScreen = ({ navigation, route }) => {
   const pickImage = async (camera = false) => {
     try {
       const img = camera
-        ? await ImagePicker.openCamera({ width: 600, height: 600, cropping: true, compressImageQuality: 0.05, })
-        : await ImagePicker.openPicker({ width: 600, height: 600, cropping: true, compressImageQuality: 0.05, });
+        ? await ImagePicker.openCamera({ width: 1200, height: 1200, cropping: true, compressImageQuality: 0.6, })
+        : await ImagePicker.openPicker({ width: 1200, height: 1200, cropping: true, compressImageQuality: 0.6, });
 
       setAvatarUri(img.path);
       console.log(img.size);

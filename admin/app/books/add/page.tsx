@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import apiClient from '@/lib/api/client';
+import { compressImage } from '@/lib/utils/imageCompression';
 
 export default function AddBookPage() {
   const router = useRouter();
@@ -105,13 +106,25 @@ export default function AddBookPage() {
       const pdfUploadResult = await apiClient.uploadFile(pdfFile, 'books', 'pdfs');
       const pdfUrl = pdfUploadResult.url;
 
-      // Step 2: Upload cover images
+      // Step 2: Upload cover images (with compression)
       setUploadProgress(30);
       const coverImageUrls: string[] = [];
       for (let i = 0; i < coverImages.length; i++) {
-        const coverResult = await apiClient.uploadFile(coverImages[i], 'covers', 'books');
-        coverImageUrls.push(coverResult.url);
-        setUploadProgress(30 + (i + 1) * (50 / coverImages.length));
+        try {
+          // Compress image before upload to avoid 413 errors
+          const compressedImage = await compressImage(coverImages[i], {
+            maxWidth: 1200,
+            maxHeight: 1200,
+            quality: 0.7,
+            maxSizeMB: 2,
+          });
+          const coverResult = await apiClient.uploadFile(compressedImage, 'covers', 'books');
+          coverImageUrls.push(coverResult.url);
+          setUploadProgress(30 + (i + 1) * (50 / coverImages.length));
+        } catch (uploadError: any) {
+          console.error(`Cover image ${i + 1} upload error:`, uploadError);
+          // Continue with other images even if one fails
+        }
       }
 
       // Step 3: Create book record

@@ -205,24 +205,38 @@ export default function AudioBookEditPage({ params }: { params: Promise<{ id: st
       setUploadProgress(30);
       let coverUrl = audioBook.cover_url;
       if (coverImages.length > 0) {
-        const imageFormData = new FormData();
-        imageFormData.append('file', coverImages[0]);
-        imageFormData.append('bucket', 'books');
-        imageFormData.append('folder', 'audio-books/covers');
-        imageFormData.append('fileName', coverImages[0].name);
-        imageFormData.append('fileType', coverImages[0].type || 'image/jpeg');
-        
-        const coverUploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
-          method: 'POST',
-          body: imageFormData,
-        });
-        
-        if (!coverUploadResponse.ok) {
-          throw new Error('Failed to upload cover image');
+        try {
+          // Compress image before upload to avoid 413 errors
+          const { compressImage } = await import('@/lib/utils/imageCompression');
+          const compressedImage = await compressImage(coverImages[0], {
+            maxWidth: 1200,
+            maxHeight: 1200,
+            quality: 0.7,
+            maxSizeMB: 2,
+          });
+          
+          const imageFormData = new FormData();
+          imageFormData.append('file', compressedImage);
+          imageFormData.append('bucket', 'books');
+          imageFormData.append('folder', 'audio-books/covers');
+          imageFormData.append('fileName', compressedImage.name);
+          imageFormData.append('fileType', compressedImage.type || 'image/jpeg');
+          
+          const coverUploadResponse = await fetch(`${typeof window !== 'undefined' ? window.location.origin : ''}/api/upload`, {
+            method: 'POST',
+            body: imageFormData,
+          });
+          
+          if (!coverUploadResponse.ok) {
+            throw new Error('Failed to upload cover image');
+          }
+          
+          const coverResult = await coverUploadResponse.json();
+          coverUrl = coverResult.url || coverResult.path;
+        } catch (uploadError: any) {
+          console.error('Cover image upload error:', uploadError);
+          throw new Error(`Failed to upload cover image: ${uploadError.message}`);
         }
-        
-        const coverResult = await coverUploadResponse.json();
-        coverUrl = coverResult.url || coverResult.path;
       }
 
       // Step 3: Update audio book record
