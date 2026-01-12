@@ -505,6 +505,7 @@ export async function POST(request: NextRequest) {
           isbn: formData.get('isbn') as string || null,
           is_free: formData.get('is_free') === 'true' || false,
           published_date: (formData.get('published_date') as string) || new Date().toISOString(),
+          status: (formData.get('status') as string) || 'pending', // Allow admin to set status
         };
         
         console.log('📦 FormData extracted:', {
@@ -600,6 +601,7 @@ export async function POST(request: NextRequest) {
         cover_image_url,
         cover_images,
         published_date,
+        status,
       } = body;
       
       bookData = {
@@ -617,6 +619,7 @@ export async function POST(request: NextRequest) {
         cover_image_url,
         cover_images,
         published_date,
+        status: status || 'pending', // Allow admin to set status
       };
       
       // Use existing URLs if provided
@@ -640,6 +643,7 @@ export async function POST(request: NextRequest) {
       cover_image_url: bookCoverImageUrl,
       cover_images,
       published_date,
+      status: bookStatus,
     } = bookData;
 
     // Use uploaded URLs if available, otherwise use bookData URLs
@@ -789,6 +793,9 @@ export async function POST(request: NextRequest) {
       cover_images_preview: processedCoverImages.slice(0, 3).map((url: string) => url ? `${url.substring(0, 30)}...` : null),
     });
 
+    // Determine initial status - if admin is uploading, it might be published directly
+    const initialStatus = bookStatus || 'pending';
+
     // Insert book (PDF is optional - can be null)
     const { data: book, error } = await supabase
       .from('books')
@@ -807,9 +814,12 @@ export async function POST(request: NextRequest) {
         cover_image_url: finalCoverImageUrlForDb, // Optional - can be null
         cover_images: processedCoverImages, // Optional - can be empty array
         published_date: published_date || new Date().toISOString(),
-        status: 'pending',
+        status: initialStatus,
       })
-      .select()
+      .select(`
+        *,
+        author:authors(*)
+      `)
       .single();
 
     if (error) {
