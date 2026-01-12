@@ -592,7 +592,7 @@ class ApiClient {
 
     const url = `${this.baseUrl}/api/upload`;
     
-    console.log(`📤 Uploading file with axios (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, { 
+    console.log(`📤 Uploading file (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, { 
       fileName, 
       fileType, 
       bucket, 
@@ -602,93 +602,187 @@ class ApiClient {
       usingLocalServer: USE_LOCAL_SERVER,
     });
 
+    // Log FormData structure in detail (for debugging)
+    if (formData._parts) {
+      console.log('📦 FormData._parts structure:', formData._parts.map((part, index) => ({
+        index,
+        key: part[0],
+        valueType: typeof part[1],
+        valueIsObject: typeof part[1] === 'object',
+        valueKeys: typeof part[1] === 'object' ? Object.keys(part[1] || {}) : [],
+        valuePreview: typeof part[1] === 'string' 
+          ? part[1].substring(0, 50) 
+          : typeof part[1] === 'object' && part[1]?.uri
+          ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
+          : String(part[1]).substring(0, 50),
+      })));
+    }
+
     try {
-      // Log FormData structure in detail (for debugging)
-      if (formData._parts) {
-        console.log('📦 FormData._parts structure:', formData._parts.map((part, index) => ({
-          index,
-          key: part[0],
-          valueType: typeof part[1],
-          valueIsObject: typeof part[1] === 'object',
-          valueKeys: typeof part[1] === 'object' ? Object.keys(part[1] || {}) : [],
-          valuePreview: typeof part[1] === 'string' 
-            ? part[1].substring(0, 50) 
-            : typeof part[1] === 'object' && part[1]?.uri
-            ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
-            : String(part[1]).substring(0, 50),
-        })));
-      }
-      
-      const response = await axios.post(url, formData, {
-        headers: {
-          'Accept': '*/*',
-          // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
-        },
-        timeout: 90000, // 90 seconds timeout for large files
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
+      // Use XMLHttpRequest for file uploads (more reliable in React Native)
+      // React Native's XMLHttpRequest handles FormData with file URIs better than axios
+      const result = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.open('POST', url);
+        xhr.setRequestHeader('Accept', '*/*');
+        // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
+        
+        xhr.onload = () => {
+          const responseText = xhr.responseText;
+          
+          console.log(`✅ XMLHttpRequest completed (attempt ${retryCount + 1}):`, {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseLength: responseText?.length,
+          });
+          
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(responseText);
+              
+              // Check for error in response body
+              if (data.error) {
+                reject(new Error(data.error));
+                return;
+              }
+
+              // Extract URL - API should always return { success: true, url: string }
+              const uploadUrl = data.url || data.publicUrl || data.signedUrl;
+              
+              if (!uploadUrl || typeof uploadUrl !== 'string') {
+                console.error('❌ No URL in response:', JSON.stringify(data, null, 2));
+                reject(new Error('Upload succeeded but no URL returned. Please try again.'));
+                return;
+              }
+
+              console.log('✅ Upload successful, URL:', uploadUrl.substring(0, 50) + '...');
+
+              // Return consistent structure
+              resolve({
+                success: true,
+                url: uploadUrl,
+                path: data.path || null,
+                publicUrl: data.publicUrl || uploadUrl,
+                signedUrl: data.signedUrl || null,
+              });
+            } catch (parseError) {
+              reject(new Error('Invalid JSON response from server'));
+            }
+          } else {
+            let errorData;
+            try {
+              errorData = JSON.parse(responseText);
+            } catch (parseError) {
+              errorData = { error: responseText || 'Request failed' };
+            }
+            
+            const errorMsg = errorData.error || errorData.message || `Upload failed with status ${xhr.status}`;
+            
+            // Retry on 5xx errors (server errors) if we have retries left
+            if (xhr.status >= 500 && retryCount < MAX_RETRIES) {
+              console.log(`🔄 Server error ${xhr.status}, will retry... (${retryCount + 1}/${MAX_RETRIES})`);
+              // Don't reject here, let the retry logic handle it
+              const retryError = new Error(errorMsg);
+              retryError.status = xhr.status;
+              retryError.retryable = true;
+              reject(retryError);
+              return;
+            }
+            
+            const error = new Error(errorMsg);
+            error.status = xhr.status;
+            reject(error);
+          }
+        };
+        
+        xhr.onerror = (error) => {
+          console.error('❌ XMLHttpRequest onerror:', {
+            readyState: xhr.readyState,
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseText: xhr.responseText?.substring(0, 200),
+            error: error,
+          });
+          
+          const networkError = new Error('Network request failed - XMLHttpRequest error');
+          networkError.retryable = true;
+          reject(networkError);
+        };
+        
+        xhr.ontimeout = () => {
+          console.error('❌ XMLHttpRequest timeout after 90s');
+          const timeoutError = new Error('Request timeout');
+          timeoutError.retryable = true;
+          reject(timeoutError);
+        };
+        
+        xhr.timeout = 90000; // 90 seconds
+        
+        console.log('📡 Sending XMLHttpRequest POST request to:', url);
+        xhr.send(formData);
       });
       
-      console.log(`✅ Upload successful (attempt ${retryCount + 1}):`, {
-        status: response.status,
-        hasData: !!response.data,
-      });
-
-      const result = response.data;
-
-      // Check for error in response body
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      // Extract URL - API should always return { success: true, url: string }
-      const uploadUrl = result.url || result.publicUrl || result.signedUrl;
-      
-      if (!uploadUrl || typeof uploadUrl !== 'string') {
-        console.error('❌ No URL in response:', JSON.stringify(result, null, 2));
-        throw new Error('Upload succeeded but no URL returned. Please try again.');
-      }
-
-      console.log('✅ Upload successful, URL:', uploadUrl.substring(0, 50) + '...');
-
-      // Return consistent structure
-      return {
-        success: true,
-        url: uploadUrl,
-        path: result.path || null,
-        publicUrl: result.publicUrl || uploadUrl,
-        signedUrl: result.signedUrl || null,
-      };
+      return result;
     } catch (error) {
       console.error(`❌ Upload error (attempt ${retryCount + 1}):`, error);
       
-      // Handle axios errors
-      if (error.response) {
-        // Server responded with error status
-        const result = error.response.data || {};
-        const errorMsg = result.error || result.message || `Upload failed with status ${error.response.status}`;
-        
-        // Retry on 5xx errors (server errors) if we have retries left
-        if (error.response.status >= 500 && retryCount < MAX_RETRIES) {
-          console.log(`🔄 Server error ${error.response.status}, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+      // Retry logic for retryable errors
+      const isRetryable = error.retryable || 
+                         error.message?.includes('Network request failed') || 
+                         error.message?.includes('timeout') ||
+                         error.message?.includes('Cannot reach') ||
+                         (error.status && error.status >= 500);
+      
+      if (isRetryable && retryCount < MAX_RETRIES) {
+        console.log(`🔄 Retryable error detected, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+        return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+      }
+      
+      // If XMLHttpRequest fails, try axios as fallback
+      if (error.message?.includes('XMLHttpRequest') || error.message?.includes('Network request failed')) {
+        console.warn('⚠️ XMLHttpRequest failed, trying axios fallback...');
+        try {
+          const response = await axios.post(url, formData, {
+            headers: {
+              'Accept': '*/*',
+              // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
+            },
+            timeout: 90000,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+          });
+          
+          const result = response.data;
+          
+          if (result.error) {
+            throw new Error(result.error);
+          }
+
+          const uploadUrl = result.url || result.publicUrl || result.signedUrl;
+          
+          if (!uploadUrl || typeof uploadUrl !== 'string') {
+            throw new Error('Upload succeeded but no URL returned. Please try again.');
+          }
+
+          console.log('✅ Axios fallback successful, URL:', uploadUrl.substring(0, 50) + '...');
+
+          return {
+            success: true,
+            url: uploadUrl,
+            path: result.path || null,
+            publicUrl: result.publicUrl || uploadUrl,
+            signedUrl: result.signedUrl || null,
+          };
+        } catch (axiosError) {
+          console.error('❌ Axios fallback also failed:', axiosError);
+          // Continue to throw the original error
         }
-        
-        throw new Error(errorMsg);
-      } else if (error.request) {
-        // Request was made but no response received
-        const isRetryable = error.code === 'ECONNABORTED' || 
-                          error.message?.includes('Network request failed') || 
-                          error.message?.includes('timeout') ||
-                          error.message?.includes('Cannot reach');
-        
-        if (isRetryable && retryCount < MAX_RETRIES) {
-          console.log(`🔄 Network error, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
-        }
-        
+      }
+      
+      // Provide user-friendly error messages
+      if (error.message && (error.message.includes('Network request failed') || error.message.includes('Cannot reach'))) {
         const diagnosticMsg = `Network error: Cannot reach ${this.baseUrl}/api/upload\n\n` +
           `Current configuration: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}\n\n` +
           `Troubleshooting:\n` +
@@ -701,14 +795,6 @@ class ApiClient {
               `   - Make sure admin server is running: cd admin && npm run dev\n`
             : `3. For Vercel: Verify https://admin-orcin-omega.vercel.app is accessible\n`)
         throw new Error(diagnosticMsg);
-      } else if (error.code === 'ECONNABORTED') {
-        // Timeout
-        if (retryCount < MAX_RETRIES) {
-          console.log(`⏳ Upload timeout, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
-        }
-        throw new Error(`Upload timeout: The request took too long. URL: ${url}`);
       }
       
       throw error;
