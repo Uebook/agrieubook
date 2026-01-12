@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import ImagePicker from 'react-native-image-crop-picker';
-import supabase from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 
 const API_BASE_URL = 'https://admin-orcin-omega.vercel.app';
@@ -35,68 +34,6 @@ const EditProfileScreen = ({ navigation, route }) => {
   const [avatarFile, setAvatarFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [supabaseStatus, setSupabaseStatus] = useState({
-    connected: false,
-    checking: true,
-  });
-
-  // Check Supabase connection status
-  useEffect(() => {
-    const checkSupabase = async () => {
-      try {
-        console.log('🔍 Checking Supabase connection status...');
-        console.log('📦 Supabase import:', {
-          isNull: supabase === null,
-          isUndefined: supabase === undefined,
-          type: typeof supabase,
-          value: supabase,
-        });
-
-        if (supabase) {
-          // Try to access storage to verify connection
-          const hasStorage = !!supabase.storage;
-          const hasAuth = !!supabase.auth;
-          
-          setSupabaseStatus({
-            connected: hasStorage && hasAuth,
-            checking: false,
-          });
-          
-          console.log('✅ Supabase Status Check:', {
-            connected: hasStorage && hasAuth,
-            hasClient: !!supabase,
-            hasStorage: hasStorage,
-            hasAuth: hasAuth,
-            clientType: typeof supabase,
-          });
-        } else {
-          setSupabaseStatus({
-            connected: false,
-            checking: false,
-          });
-          console.error('❌ Supabase Status: NOT CONNECTED');
-          console.error('📊 Details:', {
-            supabaseIsNull: supabase === null,
-            supabaseIsUndefined: supabase === undefined,
-            supabaseType: typeof supabase,
-          });
-        }
-      } catch (error) {
-        console.error('❌ Error checking Supabase status:', error);
-        setSupabaseStatus({
-          connected: false,
-          checking: false,
-        });
-      }
-    };
-
-    // Small delay to ensure module is fully loaded
-    const timer = setTimeout(() => {
-      checkSupabase();
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, []);
   // useEffect(() => {
   //   fetch('https://admin-orcin-omega.vercel.app')
   //     .then(() => console.log('✅ Network OK'))
@@ -126,51 +63,6 @@ const EditProfileScreen = ({ navigation, route }) => {
     ]);
   };
 
-  // Upload avatar to Supabase Storage
-  const uploadAvatarToSupabase = async (file, userId) => {
-    if (!supabase) {
-      throw new Error('Supabase is not configured. Please update mobile/src/lib/supabase.js with your Supabase credentials.');
-    }
-
-    try {
-      const fileName = `${userId}/${Date.now()}-${file.name || `avatar_${Date.now()}.jpg`}`;
-
-      // Convert file path to blob for React Native
-      const response = await fetch(file.path);
-      const blob = await response.blob();
-
-      console.log('📤 Uploading avatar to Supabase:', {
-        fileName,
-        bucket: 'avatars',
-        mimeType: file.mime || 'image/jpeg',
-      });
-
-      const { data, error } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, blob, {
-          contentType: file.mime || 'image/jpeg',
-          upsert: true,
-        });
-
-      if (error) {
-        console.error('❌ Supabase upload error:', error);
-        throw error;
-      }
-
-      console.log('✅ Avatar uploaded to Supabase:', fileName);
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
-
-      return urlData.publicUrl;
-    } catch (error) {
-      console.error('❌ Error uploading avatar to Supabase:', error);
-      throw error;
-    }
-  };
-
   const updateProfile = async () => {
     if (!form.name.trim()) {
       Alert.alert('Validation', 'Name is required');
@@ -186,56 +78,37 @@ const EditProfileScreen = ({ navigation, route }) => {
     setUploading(true);
 
     try {
-      let avatarUrl = avatarUri;
+      // Create FormData for file upload
+      const formData = new FormData();
+      
+      formData.append('user_id', user.id);
+      formData.append('full_name', form.name);
+      formData.append('email', form.email || '');
+      formData.append('phone', form.mobile || '');
+      formData.append('bio', form.bio || '');
 
-      // Upload to Supabase first if new avatar selected
+      // Add profile picture if selected
       if (avatarFile?.path) {
-        if (!supabase) {
-          Alert.alert(
-            'Configuration Error',
-            'Supabase is not configured. Profile will be updated without image.\n\nPlease configure Supabase in mobile/src/lib/supabase.js',
-            [{ text: 'Continue Without Image', onPress: () => {} }]
-          );
-          // Continue without image upload
-        } else {
-          try {
-            console.log('📤 Uploading avatar to Supabase...');
-            avatarUrl = await uploadAvatarToSupabase(avatarFile, user.id);
-            console.log('✅ Avatar uploaded, URL:', avatarUrl?.substring(0, 50) + '...');
-          } catch (uploadError) {
-            console.error('❌ Avatar upload failed:', uploadError);
-            Alert.alert(
-              'Upload Failed',
-              'Failed to upload image. Profile will be updated without image.',
-              [{ text: 'Continue', onPress: () => {} }]
-            );
-            // Continue without image - use existing avatarUri or null
-            avatarUrl = avatarUri;
-          }
-        }
+        formData.append('profile_picture', {
+          uri: avatarFile.path,
+          type: avatarFile.mime || 'image/jpeg',
+          name: avatarFile.name || `avatar_${Date.now()}.jpg`,
+        });
       }
 
-      // Call API with JSON only (no FormData)
-      const payload = {
-        user_id: user.id,
-        full_name: form.name,
-        email: form.email || null,
-        phone: form.mobile || null,
-        bio: form.bio || null,
-        avatar_url: avatarUrl || null,
-      };
-
-      console.log('📤 Sending profile update to API:', {
-        user_id: payload.user_id,
-        hasAvatar: !!avatarUrl,
-      });
+      console.log('📤 Uploading profile with image to API...');
 
       const res = await axios.post(
         `${API_BASE_URL}/api/profile/update`,
-        payload,
+        formData,
         {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 30000,
+          headers: {
+            'Accept': '*/*',
+            // Do NOT set Content-Type - axios will set it automatically with boundary for FormData
+          },
+          timeout: 90000, // 90 seconds for file uploads
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
         }
       );
 
@@ -268,22 +141,6 @@ const EditProfileScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Supabase Connection Status Banner */}
-        <View style={[
-          styles.statusBanner,
-          supabaseStatus.connected ? styles.statusConnected : styles.statusDisconnected
-        ]}>
-          <Text style={styles.statusText}>
-            {supabaseStatus.checking ? (
-              '🔄 Checking Supabase connection...'
-            ) : supabaseStatus.connected ? (
-              '✅ Supabase Connected - Image uploads enabled'
-            ) : (
-              '❌ Supabase Not Connected - Image uploads disabled'
-            )}
-          </Text>
-        </View>
-
         <View style={styles.card}>
 
           <TouchableOpacity style={styles.avatarWrap} onPress={changePhoto}>
@@ -367,28 +224,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F3F4F6',
-  },
-  statusBanner: {
-    margin: 16,
-    marginBottom: 8,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  statusConnected: {
-    backgroundColor: '#D1FAE5',
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  statusDisconnected: {
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1F2937',
   },
   card: {
     margin: 16,

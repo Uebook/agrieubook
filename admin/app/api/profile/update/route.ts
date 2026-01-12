@@ -40,41 +40,76 @@ async function handleProfileUpdate(request: NextRequest) {
       contentType,
       method: request.method,
       url: request.url,
+      isMultipart: contentType.includes('multipart') || contentType.includes('form-data'),
       isJSON: contentType.includes('application/json'),
     });
     
-    // Parse JSON body (no more FormData - mobile app uploads directly to Supabase)
-    let body: any;
-    try {
-      body = await request.json();
-    } catch (parseError) {
-      const errorResponse = NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid JSON body',
-          details: 'Request body must be valid JSON',
-        },
-        { status: 400 }
-      );
-      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
-        errorResponse.headers.set(key, value);
-      });
-      return errorResponse;
-    }
+    // Support both FormData (with file) and JSON (without file)
+    const isFormData = contentType.includes('multipart') || contentType.includes('form-data');
     
-    // Extract fields from JSON body
-    const userId = body.user_id as string | null;
-    const authorId = body.author_id as string | null;
-    const fullName = body.full_name as string | null;
-    const email = body.email as string | null;
-    const phone = body.phone as string | null;
-    const address = body.address as string | null;
-    const bio = body.bio as string | null;
-    const city = body.city as string | null;
-    const state = body.state as string | null;
-    const pincode = body.pincode as string | null;
-    const website = body.website as string | null;
-    const avatarUrl = body.avatar_url as string | null; // Avatar URL from Supabase
+    let userId: string | null = null;
+    let authorId: string | null = null;
+    let fullName: string | null = null;
+    let email: string | null = null;
+    let phone: string | null = null;
+    let address: string | null = null;
+    let bio: string | null = null;
+    let city: string | null = null;
+    let state: string | null = null;
+    let pincode: string | null = null;
+    let website: string | null = null;
+    let profilePicture: File | null = null;
+    let avatarUrl: string | null = null;
+    
+    if (isFormData) {
+      // Parse FormData (with file upload)
+      const formData = await request.formData();
+      
+      userId = formData.get('user_id') as string | null;
+      authorId = formData.get('author_id') as string | null;
+      fullName = formData.get('full_name') as string | null;
+      email = formData.get('email') as string | null;
+      phone = formData.get('phone') as string | null;
+      address = formData.get('address') as string | null;
+      bio = formData.get('bio') as string | null;
+      city = formData.get('city') as string | null;
+      state = formData.get('state') as string | null;
+      pincode = formData.get('pincode') as string | null;
+      website = formData.get('website') as string | null;
+      profilePicture = formData.get('profile_picture') as File | null;
+    } else {
+      // Parse JSON body (without file)
+      let body: any;
+      try {
+        body = await request.json();
+      } catch (parseError) {
+        const errorResponse = NextResponse.json(
+          {
+            success: false,
+            error: 'Invalid request body',
+            details: 'Request body must be valid JSON or FormData',
+          },
+          { status: 400 }
+        );
+        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+          errorResponse.headers.set(key, value);
+        });
+        return errorResponse;
+      }
+      
+      userId = body.user_id as string | null;
+      authorId = body.author_id as string | null;
+      fullName = body.full_name as string | null;
+      email = body.email as string | null;
+      phone = body.phone as string | null;
+      address = body.address as string | null;
+      bio = body.bio as string | null;
+      city = body.city as string | null;
+      state = body.state as string | null;
+      pincode = body.pincode as string | null;
+      website = body.website as string | null;
+      avatarUrl = body.avatar_url as string | null;
+    }
     
     // Determine which user ID to use (user_id takes precedence over author_id)
     const targetUserId = userId || authorId;
@@ -118,10 +153,61 @@ async function handleProfileUpdate(request: NextRequest) {
       hasState: !!state,
       hasPincode: !!pincode,
       hasWebsite: !!website,
+      hasProfilePicture: !!profilePicture,
       hasAvatarUrl: !!avatarUrl,
     });
     
     const supabase = createServerClient();
+    
+    // Handle profile picture upload if provided (FormData)
+    if (profilePicture && profilePicture instanceof File) {
+      console.log('📤 Uploading profile picture to Supabase...');
+      
+      try {
+        // Read file as Buffer
+        const arrayBuffer = await profilePicture.arrayBuffer();
+        const fileBuffer = Buffer.from(arrayBuffer);
+        const fileName = profilePicture.name || `profile_${Date.now()}.jpg`;
+        const contentType = profilePicture.type || 'image/jpeg';
+        
+        // Generate unique file name
+        const timestamp = Date.now();
+        const uniqueFileName = `${targetUserId}/${timestamp}-${fileName}`;
+        
+        console.log('📤 Uploading to bucket "avatars" with path:', uniqueFileName);
+        
+        // Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(uniqueFileName, fileBuffer, {
+            contentType: contentType,
+            cacheControl: '3600',
+            upsert: false,
+          });
+        
+        if (uploadError) {
+          console.error('❌ Error uploading profile picture:', uploadError);
+        } else {
+          console.log('✅ File uploaded successfully to path:', uniqueFileName);
+          
+          // Get public URL
+          const { data: urlData } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(uniqueFileName);
+          
+          // Also generate signed URL as fallback
+          const { data: signedUrlData } = await supabase.storage
+            .from('avatars')
+            .createSignedUrl(uniqueFileName, 31536000); // 1 year expiry
+          
+          avatarUrl = signedUrlData?.signedUrl || urlData.publicUrl;
+          console.log('✅ Profile picture uploaded, URL:', avatarUrl?.substring(0, 50) + '...');
+        }
+      } catch (uploadError: any) {
+        console.error('Error processing profile picture:', uploadError);
+        // Continue without profile picture - don't fail the entire update
+      }
+    }
     
     // Prepare update data
     const updateData: any = {
