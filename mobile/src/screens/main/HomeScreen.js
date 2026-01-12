@@ -36,7 +36,7 @@ const HomeScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [userRating, setUserRating] = useState(0);
-  
+
   // Ensure userData is safely accessed
   const safeUserData = userData || {};
 
@@ -48,13 +48,13 @@ const HomeScreen = ({ navigation }) => {
       } else {
         setLoading(true);
       }
-      
+
       // For authors: fetch only their own books (all statuses)
       // For readers: fetch all published books
-      const params = isAuthor && userId 
+      const params = isAuthor && userId
         ? { author: userId, status: 'all', limit: 100 } // Get all books by this author (all statuses) - using 'author' to match API
         : { status: 'published', limit: 50 };
-      
+
       // Fetch books and audio books (critical data)
       const [booksResult, audioBooksResult] = await Promise.all([
         apiClient.getBooks(params).catch(err => {
@@ -66,10 +66,10 @@ const HomeScreen = ({ navigation }) => {
           return { audioBooks: [] };
         }),
       ]);
-      
+
       setAllBooks(booksResult.books || []);
       setAllAudioBooks(audioBooksResult.audioBooks || []);
-      
+
       // Fetch notifications and user data (non-critical, handle errors gracefully)
       if (userId) {
         try {
@@ -81,7 +81,7 @@ const HomeScreen = ({ navigation }) => {
           console.warn('Error fetching notifications:', err);
           setNotifications([]);
         }
-        
+
         try {
           const userResult = await apiClient.getUser(userId);
           if (userResult && userResult.user) {
@@ -138,23 +138,23 @@ const HomeScreen = ({ navigation }) => {
 
   // Fetch continue reading books (purchased books with reading progress)
   const [continueReading, setContinueReading] = useState([]);
-  
+
   useEffect(() => {
     const fetchContinueReading = async () => {
       if (isAuthor || !userId) {
         setContinueReading([]);
         return;
       }
-      
+
       try {
         // Fetch user's purchased books
         const ordersResponse = await apiClient.getOrders(userId, { limit: 50 });
         const orders = ordersResponse.orders || [];
-        
+
         // Extract books from orders and format for continue reading
         const continueBooks = [];
         const bookIds = new Set();
-        
+
         orders.forEach((order) => {
           if (order.books && order.books.length > 0) {
             order.books.forEach((book) => {
@@ -176,7 +176,7 @@ const HomeScreen = ({ navigation }) => {
             });
           }
         });
-        
+
         // Sort by most recent purchase and limit to 5
         setContinueReading(continueBooks.slice(0, 5));
       } catch (error) {
@@ -184,10 +184,10 @@ const HomeScreen = ({ navigation }) => {
         setContinueReading([]);
       }
     };
-    
+
     fetchContinueReading();
   }, [userId, isAuthor]);
-  
+
   // Trending: Show 3 published books from database
   const trending = isAuthor ? [] : allBooks.slice(0, 3);
   // Recommended: Show up to 5 published books from database
@@ -588,7 +588,7 @@ const HomeScreen = ({ navigation }) => {
   const renderBookItem = ({ item }) => {
     const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
     const authorName = item.author?.name || item.author_name || 'Unknown Author';
-    
+
     return (
       <TouchableOpacity
         style={styles.bookCard}
@@ -608,7 +608,7 @@ const HomeScreen = ({ navigation }) => {
   const renderAuthorBookItem = ({ item }) => {
     const coverUrl = item.cover_image_url || item.cover || 'https://via.placeholder.com/200';
     const authorName = item.author?.name || item.author_name || 'Unknown Author';
-    
+
     return (
       <TouchableOpacity
         style={styles.bookCard}
@@ -696,7 +696,7 @@ const HomeScreen = ({ navigation }) => {
   });
 
   return (
-    <ScrollView 
+    <ScrollView
       style={dynamicStyles.container}
       refreshControl={
         <RefreshControl

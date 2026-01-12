@@ -39,7 +39,7 @@ import {
 ======================= */
 const extractFileUrl = (res) => {
   if (!res || typeof res !== 'object' || res === null || res instanceof Error) return null;
-  
+
   try {
     // Use 'in' operator to check for properties, then use bracket notation to safely access
     if ('url' in res) {
@@ -80,13 +80,13 @@ const extractFileUrl = (res) => {
         try {
           const urlValue = data['url'];
           if (urlValue && typeof urlValue === 'string') return urlValue;
-        } catch (e) {}
+        } catch (e) { }
       }
       if ('path' in data) {
         try {
           const pathValue = data['path'];
           if (pathValue && typeof pathValue === 'string') return pathValue;
-        } catch (e) {}
+        } catch (e) { }
       }
     }
     if ('file' in res && res['file'] && typeof res['file'] === 'object') {
@@ -95,20 +95,20 @@ const extractFileUrl = (res) => {
         try {
           const urlValue = file['url'];
           if (urlValue && typeof urlValue === 'string') return urlValue;
-        } catch (e) {}
+        } catch (e) { }
       }
       if ('path' in file) {
         try {
           const pathValue = file['path'];
           if (pathValue && typeof pathValue === 'string') return pathValue;
-        } catch (e) {}
+        } catch (e) { }
       }
     }
   } catch (error) {
     console.error('Error in extractFileUrl:', error);
     return null;
   }
-  
+
   return null;
 };
 
@@ -310,7 +310,7 @@ const BookUploadScreen = ({ navigation }) => {
       } else {
         console.error('Error picking document:', err);
         const errorMessage = err?.message || err?.toString() || 'Unknown error';
-        
+
         // Check for specific activity errors
         if (errorMessage.includes('Current activity') || errorMessage.includes('activity')) {
           Alert.alert(
@@ -395,7 +395,7 @@ const BookUploadScreen = ({ navigation }) => {
       } else {
         console.error('Error picking audio:', err);
         const errorMessage = err?.message || err?.toString() || 'Unknown error';
-        
+
         // Check for specific activity errors
         if (errorMessage.includes('Current activity') || errorMessage.includes('activity')) {
           Alert.alert(
@@ -432,10 +432,10 @@ const BookUploadScreen = ({ navigation }) => {
         // Upload files separately first (like profile upload), then create book
         setUploadProgress(10);
         const bookPrice = parseFloat(formData.price) || 0;
-        
+
         let coverImageUrl = coverImageUri && coverImageUri.startsWith('http') ? coverImageUri : null;
         let pdfUrl = null;
-        
+
         // Step 1: Upload cover image if new one selected (like profile upload)
         if (coverImageFile && coverImageFile.path && !coverImageFile.path.startsWith('http')) {
           setUploadingCoverImage(true);
@@ -447,14 +447,14 @@ const BookUploadScreen = ({ navigation }) => {
               mime: coverImageFile.mime,
               filename: coverImageFile.filename,
             });
-            
+
             // Pass file object directly - uploadFile handles path, mime, filename
             const uploadResult = await apiClient.uploadFile(
               coverImageFile, // Pass directly - has path, mime, filename
               'books',
               'covers'
             );
-            
+
             console.log('📥 Upload result received:', {
               hasResult: !!uploadResult,
               resultType: typeof uploadResult,
@@ -462,17 +462,17 @@ const BookUploadScreen = ({ navigation }) => {
               resultKeys: uploadResult && typeof uploadResult === 'object' ? Object.keys(uploadResult) : [],
               resultValue: uploadResult,
             });
-            
+
             // Safely extract URL
             if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
-              coverImageUrl = ('url' in uploadResult && uploadResult['url']) 
-                ? uploadResult['url'] 
-                : ('success' in uploadResult && uploadResult['success'] && 'url' in uploadResult)
+              coverImageUrl = ('url' in uploadResult && uploadResult['url'])
                 ? uploadResult['url']
-                : null;
-              
+                : ('success' in uploadResult && uploadResult['success'] && 'url' in uploadResult)
+                  ? uploadResult['url']
+                  : null;
+
               console.log('📥 Extracted coverImageUrl:', coverImageUrl);
-              
+
               if (coverImageUrl) {
                 setCoverImageUri(coverImageUrl);
                 console.log('✅ Cover image uploaded successfully:', coverImageUrl);
@@ -495,7 +495,7 @@ const BookUploadScreen = ({ navigation }) => {
             setUploadingCoverImage(false);
           }
         }
-        
+
         // Step 2: Upload PDF if provided (optional)
         if (pdfFile) {
           setUploadProgress(40);
@@ -513,8 +513,8 @@ const BookUploadScreen = ({ navigation }) => {
             );
             // Safely extract URL
             if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
-              pdfUrl = ('url' in uploadResult && uploadResult['url']) 
-                ? uploadResult['url'] 
+              pdfUrl = ('url' in uploadResult && uploadResult['url'])
+                ? uploadResult['url']
                 : null;
               if (pdfUrl) {
                 console.log('✅ PDF uploaded:', pdfUrl);
@@ -526,7 +526,7 @@ const BookUploadScreen = ({ navigation }) => {
             pdfUrl = null;
           }
         }
-        
+
         // Step 3: Create book with metadata and uploaded file URLs
         setUploadProgress(70);
         try {
@@ -547,17 +547,17 @@ const BookUploadScreen = ({ navigation }) => {
             cover_images: coverImageUrl ? [coverImageUrl] : [],
             pdf_url: pdfUrl,
           };
-          
+
           console.log('📤 Book data:', {
             title: bookData.title,
             hasCoverImage: !!coverImageUrl,
             hasPdf: !!pdfUrl,
           });
-          
+
           const result = await apiClient.createBook(bookData, null); // Use JSON, not FormData
           console.log('✅ Book created successfully:', result);
           setUploadProgress(100);
-          
+
           Alert.alert(
             'Success',
             'Book uploaded successfully!',
@@ -610,8 +610,8 @@ const BookUploadScreen = ({ navigation }) => {
             );
             // Safely extract URL using bracket notation and 'in' operator
             if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
-              const uploadedUrl = ('url' in uploadResult && uploadResult['url']) 
-                ? uploadResult['url'] 
+              const uploadedUrl = ('url' in uploadResult && uploadResult['url'])
+                ? uploadResult['url']
                 : null;
               if (uploadedUrl) {
                 coverImageUrl = uploadedUrl;
@@ -732,7 +732,7 @@ const BookUploadScreen = ({ navigation }) => {
       price: formData.price,
       bookType,
     });
-    
+
     // Validate form
     if (!formData.title.trim()) {
       console.log('❌ Validation failed: title missing');
@@ -774,7 +774,7 @@ const BookUploadScreen = ({ navigation }) => {
     console.log('📋 Current showPreview state:', showPreview);
     setShowPreview(true);
     console.log('📋 showPreview state set to: true');
-    
+
     // Double check after a brief delay
     setTimeout(() => {
       console.log('📋 showPreview state after setState:', showPreview);
@@ -1708,147 +1708,147 @@ const BookUploadScreen = ({ navigation }) => {
             style={{ flex: 1, justifyContent: 'flex-end' }}
           >
             <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Book Preview</Text>
-              <TouchableOpacity onPress={() => setShowPreview(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Book Preview</Text>
+                <TouchableOpacity onPress={() => setShowPreview(false)}>
+                  <Text style={styles.modalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
 
-            <ScrollView style={styles.previewContent} showsVerticalScrollIndicator={false}>
-              {/* Cover Image Preview */}
-              {coverImageUri && (
-                <View style={styles.previewImageContainer}>
-                  <Image
-                    source={{ uri: coverImageUri }}
-                    style={styles.previewImage}
-                    resizeMode="cover"
-                  />
+              <ScrollView style={styles.previewContent} showsVerticalScrollIndicator={false}>
+                {/* Cover Image Preview */}
+                {coverImageUri && (
+                  <View style={styles.previewImageContainer}>
+                    <Image
+                      source={{ uri: coverImageUri }}
+                      style={styles.previewImage}
+                      resizeMode="cover"
+                    />
+                  </View>
+                )}
+
+                {/* Book Information */}
+                <View style={styles.previewSection}>
+                  <Text style={styles.previewLabel}>Title</Text>
+                  <Text style={styles.previewValue}>{formData.title}</Text>
                 </View>
-              )}
 
-              {/* Book Information */}
-              <View style={styles.previewSection}>
-                <Text style={styles.previewLabel}>Title</Text>
-                <Text style={styles.previewValue}>{formData.title}</Text>
-              </View>
+                <View style={styles.previewSection}>
+                  <Text style={styles.previewLabel}>Description</Text>
+                  <Text style={styles.previewValue}>{formData.description}</Text>
+                </View>
 
-              <View style={styles.previewSection}>
-                <Text style={styles.previewLabel}>Description</Text>
-                <Text style={styles.previewValue}>{formData.description}</Text>
-              </View>
+                <View style={styles.previewSection}>
+                  <Text style={styles.previewLabel}>Category</Text>
+                  <Text style={styles.previewValue}>
+                    {categoriesList?.find(cat => cat.id === formData.category)?.name || 'Not selected'}
+                  </Text>
+                </View>
 
-              <View style={styles.previewSection}>
-                <Text style={styles.previewLabel}>Category</Text>
-                <Text style={styles.previewValue}>
-                  {categoriesList?.find(cat => cat.id === formData.category)?.name || 'Not selected'}
-                </Text>
-              </View>
+                {bookType === 'book' && (
+                  <>
+                    <View style={styles.previewSection}>
+                      <Text style={styles.previewLabel}>Price</Text>
+                      <Text style={styles.previewValue}>
+                        ₹{parseFloat(formData.price) || 0}
+                      </Text>
+                    </View>
 
-              {bookType === 'book' && (
-                <>
-                  <View style={styles.previewSection}>
-                    <Text style={styles.previewLabel}>Price</Text>
-                    <Text style={styles.previewValue}>
-                      ₹{parseFloat(formData.price) || 0}
+                    {formData.pages && (
+                      <View style={styles.previewSection}>
+                        <Text style={styles.previewLabel}>Pages</Text>
+                        <Text style={styles.previewValue}>{formData.pages}</Text>
+                      </View>
+                    )}
+
+                    {formData.isbn && (
+                      <View style={styles.previewSection}>
+                        <Text style={styles.previewLabel}>ISBN</Text>
+                        <Text style={styles.previewValue}>{formData.isbn}</Text>
+                      </View>
+                    )}
+
+                    <View style={styles.previewSection}>
+                      <Text style={styles.previewLabel}>Language</Text>
+                      <Text style={styles.previewValue}>{formData.language}</Text>
+                    </View>
+
+                    {pdfFile && (
+                      <View style={styles.previewSection}>
+                        <Text style={styles.previewLabel}>PDF File</Text>
+                        <Text style={styles.previewValue}>
+                          {pdfFile.name || pdfFile.file?.name || 'book.pdf'}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {bookType === 'audio' && (
+                  <>
+                    <View style={styles.previewSection}>
+                      <Text style={styles.previewLabel}>Language</Text>
+                      <Text style={styles.previewValue}>{formData.language}</Text>
+                    </View>
+
+                    {audioFile && (
+                      <View style={styles.previewSection}>
+                        <Text style={styles.previewLabel}>Audio File</Text>
+                        <Text style={styles.previewValue}>
+                          {audioFile.name || 'audio.mp3'}
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {/* Missing Items Warning */}
+                {(!coverImageUri && !coverImageFile) && (
+                  <View style={styles.previewWarning}>
+                    <Text style={styles.previewWarningText}>
+                      ⚠️ No cover image selected
                     </Text>
                   </View>
-
-                  {formData.pages && (
-                    <View style={styles.previewSection}>
-                      <Text style={styles.previewLabel}>Pages</Text>
-                      <Text style={styles.previewValue}>{formData.pages}</Text>
-                    </View>
-                  )}
-
-                  {formData.isbn && (
-                    <View style={styles.previewSection}>
-                      <Text style={styles.previewLabel}>ISBN</Text>
-                      <Text style={styles.previewValue}>{formData.isbn}</Text>
-                    </View>
-                  )}
-
-                  <View style={styles.previewSection}>
-                    <Text style={styles.previewLabel}>Language</Text>
-                    <Text style={styles.previewValue}>{formData.language}</Text>
-                  </View>
-
-                  {pdfFile && (
-                    <View style={styles.previewSection}>
-                      <Text style={styles.previewLabel}>PDF File</Text>
-                      <Text style={styles.previewValue}>
-                        {pdfFile.name || pdfFile.file?.name || 'book.pdf'}
-                      </Text>
-                    </View>
-                  )}
-                </>
-              )}
-
-              {bookType === 'audio' && (
-                <>
-                  <View style={styles.previewSection}>
-                    <Text style={styles.previewLabel}>Language</Text>
-                    <Text style={styles.previewValue}>{formData.language}</Text>
-                  </View>
-
-                  {audioFile && (
-                    <View style={styles.previewSection}>
-                      <Text style={styles.previewLabel}>Audio File</Text>
-                      <Text style={styles.previewValue}>
-                        {audioFile.name || 'audio.mp3'}
-                      </Text>
-                    </View>
-                  )}
-                </>
-              )}
-
-              {/* Missing Items Warning */}
-              {(!coverImageUri && !coverImageFile) && (
-                <View style={styles.previewWarning}>
-                  <Text style={styles.previewWarningText}>
-                    ⚠️ No cover image selected
-                  </Text>
-                </View>
-              )}
-
-              {bookType === 'book' && !pdfFile && (
-                <View style={styles.previewWarning}>
-                  <Text style={styles.previewWarningText}>
-                    ⚠️ No PDF file selected
-                  </Text>
-                </View>
-              )}
-
-              {bookType === 'audio' && !audioFile && (
-                <View style={styles.previewWarning}>
-                  <Text style={styles.previewWarningText}>
-                    ⚠️ No audio file selected
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-
-            {/* Action Buttons */}
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowPreview(false)}
-              >
-                <Text style={styles.modalCancelButtonText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmButton}
-                onPress={handleConfirmUpload}
-                disabled={isUploading}
-              >
-                {isUploading ? (
-                  <ActivityIndicator color={themeColors.text.light} />
-                ) : (
-                  <Text style={styles.modalConfirmButtonText}>Confirm & Upload</Text>
                 )}
-              </TouchableOpacity>
+
+                {bookType === 'book' && !pdfFile && (
+                  <View style={styles.previewWarning}>
+                    <Text style={styles.previewWarningText}>
+                      ⚠️ No PDF file selected
+                    </Text>
+                  </View>
+                )}
+
+                {bookType === 'audio' && !audioFile && (
+                  <View style={styles.previewWarning}>
+                    <Text style={styles.previewWarningText}>
+                      ⚠️ No audio file selected
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+
+              {/* Action Buttons */}
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setShowPreview(false)}
+                >
+                  <Text style={styles.modalCancelButtonText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalConfirmButton}
+                  onPress={handleConfirmUpload}
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <ActivityIndicator color={themeColors.text.light} />
+                  ) : (
+                    <Text style={styles.modalConfirmButtonText}>Confirm & Upload</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
           </TouchableOpacity>
         </View>
       </Modal>
