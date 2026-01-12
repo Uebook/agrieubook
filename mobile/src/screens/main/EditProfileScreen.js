@@ -66,6 +66,10 @@ const EditProfileScreen = ({ navigation, route }) => {
 
   // Upload avatar to Supabase Storage
   const uploadAvatarToSupabase = async (file, userId) => {
+    if (!supabase) {
+      throw new Error('Supabase is not configured. Please update mobile/src/lib/supabase.js with your Supabase credentials.');
+    }
+
     try {
       const fileName = `${userId}/${Date.now()}-${file.name || `avatar_${Date.now()}.jpg`}`;
 
