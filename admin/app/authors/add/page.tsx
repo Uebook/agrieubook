@@ -45,7 +45,7 @@ export default function AddAuthorPage() {
       
       // Upload profile image if provided
       if (profileImage) {
-        const imageResult = await apiClient.uploadFile(profileImage, 'covers', 'authors');
+        const imageResult = await apiClient.uploadFile(profileImage, 'books', 'authors');
         profileImageUrl = imageResult.url;
       }
 

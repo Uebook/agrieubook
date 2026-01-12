@@ -118,7 +118,7 @@ export default function AddBookPage() {
             quality: 0.7,
             maxSizeMB: 2,
           });
-          const coverResult = await apiClient.uploadFile(compressedImage, 'covers', 'books');
+          const coverResult = await apiClient.uploadFile(compressedImage, 'books', 'covers');
           coverImageUrls.push(coverResult.url);
           setUploadProgress(30 + (i + 1) * (50 / coverImages.length));
         } catch (uploadError: any) {
