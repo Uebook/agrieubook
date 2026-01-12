@@ -466,12 +466,49 @@ const BookUploadScreen = ({ navigation }) => {
         // Add cover image file if new one selected (optional)
         if (coverImageFile && coverImageFile.uri && !coverImageFile.uri.startsWith('http')) {
           setUploadingCoverImage(true);
-          uploadFormData.append('coverImage', {
-            uri: coverImageFile.uri,
-            type: coverImageFile.type || 'image/jpeg',
-            name: coverImageFile.name || `cover_${Date.now()}.jpg`,
+          
+          // Normalize URI like uploadFile does (important for React Native)
+          let normalizedUri = coverImageFile.uri;
+          if (!normalizedUri.startsWith('file://') && 
+              !normalizedUri.startsWith('content://') && 
+              !normalizedUri.startsWith('http://') && 
+              !normalizedUri.startsWith('https://')) {
+            // If it's a relative path, make it absolute
+            if (normalizedUri.startsWith('/')) {
+              normalizedUri = 'file://' + normalizedUri;
+            } else {
+              normalizedUri = 'file:///' + normalizedUri;
+            }
+          }
+          
+          // Get file name
+          let fileName = coverImageFile.name;
+          if (!fileName) {
+            const uriParts = normalizedUri.split('/');
+            fileName = uriParts[uriParts.length - 1] || `cover_${Date.now()}.jpg`;
+            fileName = fileName.split('?')[0]; // Remove query params
+            try {
+              fileName = decodeURIComponent(fileName);
+            } catch (e) {
+              // If decoding fails, use as is
+            }
+          }
+          
+          // Get file type
+          const fileType = coverImageFile.type || 'image/jpeg';
+          
+          console.log('📤 Adding cover image to FormData...', {
+            originalUri: coverImageFile.uri.substring(0, 50),
+            normalizedUri: normalizedUri.substring(0, 50),
+            fileName,
+            fileType,
           });
-          console.log('📤 Adding cover image to FormData...');
+          
+          uploadFormData.append('coverImage', {
+            uri: normalizedUri,
+            type: fileType,
+            name: fileName,
+          });
         }
         
         // Add PDF file if provided (optional)
@@ -481,12 +518,48 @@ const BookUploadScreen = ({ navigation }) => {
             type: pdfFile.type || 'application/pdf',
             name: pdfFile.name || 'book.pdf',
           };
-          uploadFormData.append('pdfFile', {
-            uri: fileToUpload.uri,
-            type: fileToUpload.type || 'application/pdf',
-            name: fileToUpload.name || 'book.pdf',
+          
+          // Normalize URI like uploadFile does (important for React Native)
+          let normalizedUri = fileToUpload.uri;
+          if (!normalizedUri.startsWith('file://') && 
+              !normalizedUri.startsWith('content://') && 
+              !normalizedUri.startsWith('http://') && 
+              !normalizedUri.startsWith('https://')) {
+            // If it's a relative path, make it absolute
+            if (normalizedUri.startsWith('/')) {
+              normalizedUri = 'file://' + normalizedUri;
+            } else {
+              normalizedUri = 'file:///' + normalizedUri;
+            }
+          }
+          
+          // Get file name
+          let fileName = fileToUpload.name;
+          if (!fileName) {
+            const uriParts = normalizedUri.split('/');
+            fileName = uriParts[uriParts.length - 1] || 'book.pdf';
+            fileName = fileName.split('?')[0]; // Remove query params
+            try {
+              fileName = decodeURIComponent(fileName);
+            } catch (e) {
+              // If decoding fails, use as is
+            }
+          }
+          
+          const fileType = fileToUpload.type || 'application/pdf';
+          
+          console.log('📤 Adding PDF to FormData...', {
+            originalUri: fileToUpload.uri?.substring(0, 50),
+            normalizedUri: normalizedUri.substring(0, 50),
+            fileName,
+            fileType,
           });
-          console.log('📤 Adding PDF to FormData...');
+          
+          uploadFormData.append('pdfFile', {
+            uri: normalizedUri,
+            type: fileType,
+            name: fileName,
+          });
         }
         
         setUploadProgress(30);
