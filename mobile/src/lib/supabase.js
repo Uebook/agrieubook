@@ -8,29 +8,10 @@
 // Immediate log to verify module is loading
 console.log('🚀 SUPABASE MODULE STARTING - Line 1');
 
-let createClient;
-try {
-  console.log('🚀 Importing createClient...');
-  const supabaseModule = require('@supabase/supabase-js');
-  createClient = supabaseModule.createClient;
-  console.log('✅ createClient imported successfully:', typeof createClient);
-} catch (importError) {
-  console.error('❌ CRITICAL: Failed to import createClient:', importError);
-  createClient = null;
-}
-
-// Also try ES6 import as fallback
-if (!createClient) {
-  try {
-    const { createClient: createClientES6 } = require('@supabase/supabase-js');
-    createClient = createClientES6;
-    console.log('✅ createClient imported via ES6 fallback');
-  } catch (e) {
-    console.error('❌ ES6 import also failed:', e);
-  }
-}
+import { createClient } from '@supabase/supabase-js';
 
 console.log('📦 Supabase module loading...');
+console.log('📦 createClient type:', typeof createClient);
 
 // Supabase Configuration - Already configured ✅
 const SUPABASE_URL = 'https://isndoxsyjbdzibhkrisj.supabase.co';
@@ -71,9 +52,10 @@ console.log('🔍 Validation check:', {
 if (hasValidUrl && hasValidKey) {
   console.log('✅ Validation passed, creating client...');
   
-  if (!createClient) {
-    console.error('❌ CRITICAL: createClient function is not available!');
-    console.error('❌ Cannot create Supabase client without createClient function');
+  if (!createClient || typeof createClient !== 'function') {
+    console.error('❌ CRITICAL: createClient is not a function!');
+    console.error('❌ createClient value:', createClient);
+    console.error('❌ createClient type:', typeof createClient);
   } else {
     try {
       console.log('🔧 Calling createClient with:', {
@@ -85,23 +67,23 @@ if (hasValidUrl && hasValidKey) {
 
       supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    console.log('🔧 createClient returned:', {
-      isNull: supabase === null,
-      isUndefined: supabase === undefined,
-      type: typeof supabase,
-      hasStorage: supabase ? !!supabase.storage : false,
-    });
+      console.log('🔧 createClient returned:', {
+        isNull: supabase === null,
+        isUndefined: supabase === undefined,
+        type: typeof supabase,
+        hasStorage: supabase ? !!supabase.storage : false,
+      });
 
-    // Verify client was created
-    if (supabase) {
-      console.log('✅ Supabase client initialized successfully');
-      console.log('✅ Client type:', typeof supabase);
-      console.log('✅ Client has storage:', !!supabase.storage);
-      console.log('✅ Client has auth:', !!supabase.auth);
-    } else {
-      console.error('❌ Supabase client is null after createClient call');
-    }
-  } catch (error) {
+      // Verify client was created
+      if (supabase) {
+        console.log('✅ Supabase client initialized successfully');
+        console.log('✅ Client type:', typeof supabase);
+        console.log('✅ Client has storage:', !!supabase.storage);
+        console.log('✅ Client has auth:', !!supabase.auth);
+      } else {
+        console.error('❌ Supabase client is null after createClient call');
+      }
+    } catch (error) {
       console.error('❌ CRITICAL: Exception during createClient:', error);
       console.error('Error details:', {
         message: error?.message,
