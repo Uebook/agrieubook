@@ -27,19 +27,61 @@ const hasValidKey = SUPABASE_ANON_KEY &&
 // Create Supabase client - always create if credentials are valid
 let supabase = null;
 
+// Log validation results (wrapped in try-catch to avoid Metro issues)
+try {
+  if (__DEV__) {
+    console.log('🔍 Supabase validation:', {
+      hasValidUrl,
+      hasValidKey,
+      url: SUPABASE_URL?.substring(0, 30) + '...',
+      keyLength: SUPABASE_ANON_KEY?.length,
+    });
+  }
+} catch (e) {
+  // Ignore logging errors
+}
+
 if (hasValidUrl && hasValidKey) {
   try {
     // Use same pattern as backend: createClient with auth options
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
       },
     });
+    
+    // Verify client was created
+    if (client && typeof client === 'object') {
+      supabase = client;
+      try {
+        if (__DEV__) {
+          console.log('✅ Supabase client created successfully');
+        }
+      } catch (e) {}
+    } else {
+      if (__DEV__) {
+        console.error('❌ createClient returned invalid value:', typeof client, client);
+      }
+      supabase = null;
+    }
   } catch (error) {
-    console.error('❌ Failed to create Supabase client:', error);
     supabase = null;
+    try {
+      if (__DEV__) {
+        console.error('❌ Failed to create Supabase client:', error?.message || String(error));
+      }
+    } catch (e) {}
   }
+} else {
+  try {
+    if (__DEV__) {
+      console.error('❌ Supabase validation failed:', {
+        hasValidUrl,
+        hasValidKey,
+      });
+    }
+  } catch (e) {}
 }
 
 export default supabase;
