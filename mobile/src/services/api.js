@@ -30,65 +30,51 @@ class ApiClient {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
+    const method = options.method || 'GET';
     
-    console.log('API Request:', { url, method: options.method || 'GET', baseUrl: this.baseUrl });
+    console.log('API Request (axios):', { url, method, baseUrl: this.baseUrl });
     
-    const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': '*/*',
-        ...options.headers,
-      },
-      ...options,
-    };
-
-    let timeoutId;
     try {
-      // Add timeout for all requests
-      const controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-      
-      config.signal = controller.signal;
-      
-      const response = await fetch(url, config);
-      if (timeoutId) clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
-          // If response is not JSON, get text
-          const text = await response.text();
-          errorData = { error: text || 'Request failed' };
-        }
-        
-        const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${response.status}`;
-        const error = new Error(errorMessage);
-        error.status = response.status;
-        error.details = errorData.details;
-        throw error;
+      const config = {
+        method,
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': '*/*',
+          ...options.headers,
+        },
+        timeout: 30000, // 30 second timeout
+      };
+
+      // Add body for POST/PUT/PATCH requests
+      if (options.body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+        config.data = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
       }
 
-      return await response.json();
+      const response = await axios(config);
+      return response.data;
     } catch (error) {
-      if (timeoutId) clearTimeout(timeoutId);
       console.error(`API Error (${endpoint}):`, error);
       console.error(`API Error details:`, {
         url,
-        method: options.method || 'GET',
+        method,
         baseUrl: this.baseUrl,
         errorName: error.name,
         errorMessage: error.message,
         usingLocalServer: USE_LOCAL_SERVER,
       });
       
-      // Re-throw with more context if it's a network error
-      if (error.name === 'AbortError') {
-        throw new Error(`Request timeout: ${url}. Please check your internet connection.`);
-      }
-      
-      if (error.message === 'Network request failed' || error.name === 'TypeError') {
+      // Handle axios errors
+      if (error.response) {
+        // Server responded with error status
+        const errorData = error.response.data || {};
+        const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${error.response.status}`;
+        const apiError = new Error(errorMessage);
+        apiError.status = error.response.status;
+        apiError.details = errorData.details;
+        throw apiError;
+      } else if (error.request) {
+        // Request was made but no response received
         const networkError = new Error(
           `Network error: Cannot reach ${url}\n\n` +
           `Please check:\n` +
@@ -98,7 +84,10 @@ class ApiClient {
         );
         networkError.originalError = error;
         throw networkError;
+      } else if (error.code === 'ECONNABORTED') {
+        throw new Error(`Request timeout: ${url}. Please check your internet connection.`);
       }
+      
       throw error;
     }
   }
@@ -128,7 +117,7 @@ class ApiClient {
     if (formData) {
       // Use FormData for single API call with files
       const url = `${this.baseUrl}/api/books`;
-      console.log('📤 Creating book with FormData (single API call)...');
+      console.log('📤 Creating book with FormData (axios)...');
       console.log('📤 Request URL:', url);
       console.log('📤 FormData keys:', formData._parts ? formData._parts.map((p) => p[0]) : 'unknown');
       
@@ -146,88 +135,35 @@ class ApiClient {
           });
         }
         
-        // Use the same request pattern as other APIs, but override headers for FormData
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout for large files
-        
-        const response = await fetch(url, {
-          method: 'POST',
-          body: formData,
+        const response = await axios.post(url, formData, {
           headers: {
             'Accept': '*/*',
-            // Do NOT set Content-Type - React Native FormData sets it automatically with boundary
+            // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
           },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-        
-        console.log('📥 Response received:', {
-          status: response.status,
-          statusText: response.statusText,
-          ok: response.ok,
-          headers: Object.fromEntries(response.headers.entries()),
+          timeout: 120000, // 2 minute timeout for large files
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
         });
         
-        if (!response.ok) {
-          let errorData;
-          try {
-            const responseText = await response.text();
-            errorData = JSON.parse(responseText);
-          } catch (parseError) {
-            const responseText = await response.text();
-            errorData = { error: responseText || 'Request failed' };
-          }
-          const error = new Error(errorData.error || `HTTP error! status: ${response.status}`);
-          error.status = response.status;
-          console.error('❌ Book creation failed:', error);
-          throw error;
-        }
-        
-        const responseText = await response.text();
-        console.log('📥 Response text length:', responseText.length);
-        console.log('📥 Response text preview:', responseText.substring(0, 200));
-        
-        const result = JSON.parse(responseText);
         console.log('✅ Book created successfully:', {
-          bookId: result.book?.id,
-          title: result.book?.title,
-          hasCoverImage: !!result.book?.cover_image_url,
-          hasPdf: !!result.book?.pdf_url,
+          bookId: response.data?.book?.id,
+          title: response.data?.book?.title,
+          hasCoverImage: !!response.data?.book?.cover_image_url,
+          hasPdf: !!response.data?.book?.pdf_url,
         });
-        return result;
+        return response.data;
       } catch (error) {
         console.error('❌ Error creating book with FormData:', error);
-        console.error('Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack,
-          status: error.status,
-        });
         
-        // Re-throw with more context if it's a network error
-        if (error.name === 'AbortError') {
-          throw new Error(`Request timeout: ${url}. The request took too long (120s). Try with smaller files or check Vercel function timeout.`);
-        }
-        
-        // Check if it's a network error or fetch error
-        const isNetworkError = error.message === 'Network request failed' || 
-                              error.name === 'TypeError' ||
-                              error.message?.includes('fetch') ||
-                              error.message?.includes('Network');
-        
-        if (isNetworkError) {
-          // Try to get more details about the error
-          const errorDetails = {
-            name: error.name,
-            message: error.message,
-            stack: error.stack?.substring(0, 200),
-          };
-          
-          console.error('🔴 Network Error Details:', errorDetails);
-          
+        if (error.response) {
+          const errorData = error.response.data || {};
+          const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${error.response.status}`;
+          const apiError = new Error(errorMessage);
+          apiError.status = error.response.status;
+          throw apiError;
+        } else if (error.request) {
           const networkError = new Error(
             `Network error: Cannot reach the server at ${url}\n\n` +
-            `Error: ${error.message}\n` +
             `Current configuration: ${this.baseUrl.includes('localhost') ? 'LOCAL' : 'VERCEL PRODUCTION'}\n\n` +
             `Troubleshooting:\n` +
             `1. Check internet connection\n` +
@@ -235,11 +171,12 @@ class ApiClient {
             `3. For Vercel: Check function logs at vercel.com/dashboard\n` +
             `4. Try uploading without files first to test connection\n` +
             `5. Request might be too large - try smaller files\n` +
-            `6. Check Vercel function timeout (max 10s on Hobby plan)`
+            `6. Check Vercel function timeout (max 60s on Pro plan)`
           );
           networkError.originalError = error;
-          networkError.details = errorDetails;
           throw networkError;
+        } else if (error.code === 'ECONNABORTED') {
+          throw new Error(`Request timeout: ${url}. The request took too long (120s). Try with smaller files or check Vercel function timeout.`);
         }
         
         throw error;
@@ -354,6 +291,8 @@ class ApiClient {
           ? part[1].substring(0, 50) 
           : typeof part[1] === 'object' && part[1]?.uri
           ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
+          : typeof part[1] === 'object' && part[1]?.path
+          ? `{path: ${part[1].path.substring(0, 30)}..., type: ${part[1].type || part[1].mime}, name: ${part[1].name || part[1].filename}}`
           : String(part[1]).substring(0, 50),
       })));
     }
@@ -402,6 +341,8 @@ class ApiClient {
           baseUrl: this.baseUrl,
           usingLocalServer: USE_LOCAL_SERVER,
           isDev: __DEV__,
+          errorCode: error.code,
+          errorMessage: error.message,
         });
         
         throw new Error(
@@ -412,6 +353,8 @@ class ApiClient {
           `3. API server status\n\n` +
           `Current config: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}`
         );
+      } else if (error.code === 'ECONNABORTED') {
+        throw new Error(`Request timeout: ${url}. The request took too long (90s).`);
       } else {
         // Error setting up the request
         console.error('❌ Request setup error:', {
@@ -599,7 +542,7 @@ class ApiClient {
 
     const url = `${this.baseUrl}/api/upload`;
     
-    console.log(`📤 Uploading file (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, { 
+    console.log(`📤 Uploading file with axios (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, { 
       fileName, 
       fileType, 
       bucket, 
@@ -610,218 +553,38 @@ class ApiClient {
     });
 
     try {
-      // Test connection first (optional - helps with debugging)
-      console.log('🔍 Testing connection to:', url);
+      // Log FormData structure in detail (for debugging)
+      if (formData._parts) {
+        console.log('📦 FormData._parts structure:', formData._parts.map((part, index) => ({
+          index,
+          key: part[0],
+          valueType: typeof part[1],
+          valueIsObject: typeof part[1] === 'object',
+          valueKeys: typeof part[1] === 'object' ? Object.keys(part[1] || {}) : [],
+          valuePreview: typeof part[1] === 'string' 
+            ? part[1].substring(0, 50) 
+            : typeof part[1] === 'object' && part[1]?.uri
+            ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
+            : String(part[1]).substring(0, 50),
+        })));
+      }
       
-      // Make the request with timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout for large files
+      const response = await axios.post(url, formData, {
+        headers: {
+          'Accept': '*/*',
+          // Do NOT set Content-Type - axios will automatically set it with boundary for FormData
+        },
+        timeout: 90000, // 90 seconds timeout for large files
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
       
-      let response;
-      try {
-        // Log FormData structure in detail (for debugging)
-        if (formData._parts) {
-          console.log('📦 FormData._parts structure:', formData._parts.map((part, index) => ({
-            index,
-            key: part[0],
-            valueType: typeof part[1],
-            valueIsObject: typeof part[1] === 'object',
-            valueKeys: typeof part[1] === 'object' ? Object.keys(part[1] || {}) : [],
-            valuePreview: typeof part[1] === 'string' 
-              ? part[1].substring(0, 50) 
-              : typeof part[1] === 'object' && part[1]?.uri
-              ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
-              : String(part[1]).substring(0, 50),
-          })));
-        }
-        
-        console.log('📡 Sending fetch request...', {
-          method: 'POST',
-          url: url,
-          hasBody: !!formData,
-          timeout: '90s',
-          formDataKeys: formData._parts ? formData._parts.map(p => p[0]) : 'unknown',
-        });
-        
-        // Try XMLHttpRequest first (more reliable for file uploads in React Native)
-        // Fallback to fetch if XMLHttpRequest is not available
-        let useXHR = true;
-        try {
-          response = await new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            
-            xhr.open('POST', url);
-            xhr.setRequestHeader('Accept', '*/*');
-            // Do NOT set Content-Type - let React Native FormData set it automatically
-            
-            xhr.onload = () => {
-              // Create a Response-like object for compatibility
-              const responseText = xhr.responseText;
-              const responseHeaders = new Headers();
-              
-              // Parse response headers
-              const allHeaders = xhr.getAllResponseHeaders();
-              if (allHeaders) {
-                allHeaders.split('\r\n').forEach(line => {
-                  const parts = line.split(': ');
-                  if (parts.length === 2) {
-                    responseHeaders.set(parts[0], parts[1]);
-                  }
-                });
-              }
-              
-              resolve({
-                ok: xhr.status >= 200 && xhr.status < 300,
-                status: xhr.status,
-                statusText: xhr.statusText,
-                headers: responseHeaders,
-                text: async () => responseText,
-                json: async () => {
-                  try {
-                    return JSON.parse(responseText);
-                  } catch (e) {
-                    throw new Error('Invalid JSON response');
-                  }
-                },
-              });
-            };
-            
-            xhr.onerror = (error) => {
-              console.error('❌ XMLHttpRequest onerror:', {
-                readyState: xhr.readyState,
-                status: xhr.status,
-                statusText: xhr.statusText,
-                responseText: xhr.responseText?.substring(0, 200),
-                error: error,
-              });
-              reject(new Error('Network request failed - XMLHttpRequest error'));
-            };
-            
-            xhr.ontimeout = () => {
-              console.error('❌ XMLHttpRequest timeout after 90s');
-              reject(new Error('Request timeout'));
-            };
-            
-            xhr.timeout = 90000; // 90 seconds
-            
-            // Send FormData
-            xhr.send(formData);
-          });
-          
-          console.log('✅ XMLHttpRequest completed, status:', response.status);
-        } catch (xhrError) {
-          console.warn('⚠️ XMLHttpRequest failed, trying fetch...', xhrError);
-          useXHR = false;
-          
-          // Fallback to fetch
-          // React Native FormData automatically sets Content-Type with boundary
-          // Do NOT set Content-Type header manually - let React Native handle it
-          response = await fetch(url, {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'Accept': '*/*',
-              // Explicitly do NOT set Content-Type - React Native FormData sets it automatically
-            },
-            signal: controller.signal,
-          });
-          console.log('✅ Fetch request completed, status:', response.status);
-        }
-        
-        clearTimeout(timeoutId);
-        
-        console.log('✅ Fetch request completed, status:', response.status);
-        
-        // Log response headers for debugging
-        console.log('📥 Response headers:', {
-          status: response.status,
-          statusText: response.statusText,
-          contentType: response.headers.get('content-type'),
-          contentLength: response.headers.get('content-length'),
-        });
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        console.error(`❌ Fetch error (attempt ${retryCount + 1}):`, fetchError);
-        console.error(`❌ Fetch error details:`, {
-          name: fetchError.name,
-          message: fetchError.message,
-          url: url,
-          apiBaseUrl: this.baseUrl,
-          usingLocalServer: USE_LOCAL_SERVER,
-          isDev: __DEV__,
-          errorType: fetchError.constructor.name,
-          stack: fetchError.stack,
-          // Additional debugging info
-          fileName: fileName,
-          fileType: fileType,
-          bucket: bucket,
-          folder: folder,
-        });
-        
-        // Handle different types of fetch errors
-        if (fetchError.name === 'AbortError') {
-          // Retry on timeout if we have retries left
-          if (retryCount < MAX_RETRIES) {
-            console.log(`⏳ Upload timeout, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
-            return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
-          }
-          throw new Error(`Upload timeout: The request took too long. URL: ${url}`);
-        }
-        
-        // Retry on network errors if we have retries left
-        if (fetchError.message && (fetchError.message.includes('Network request failed') || fetchError.message.includes('Failed to fetch'))) {
-          if (retryCount < MAX_RETRIES) {
-            console.log(`🔄 Network error, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-            console.log(`🔗 Trying URL: ${url}`);
-            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
-            return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
-          }
-          // Provide detailed error message with troubleshooting steps
-          const errorMsg = `Network error: Cannot reach the server at ${url}\n\n` +
-            `This is likely an Android emulator networking issue.\n\n` +
-            `Troubleshooting:\n` +
-            `1. Check if the Android emulator has internet connectivity:\n` +
-            `   - Open Chrome browser in the emulator\n` +
-            `   - Try to visit https://admin-orcin-omega.vercel.app\n` +
-            `   - If it doesn't load, the emulator has no internet\n\n` +
-            `2. Restart the Android emulator with internet connectivity\n\n` +
-            `3. Try testing on a physical Android device instead of emulator\n\n` +
-            `4. Check your computer's internet connection\n\n` +
-            `5. If Postman works but mobile app doesn't, it's likely an emulator networking issue\n\n` +
-            `Note: Postman works fine, so the API is working correctly. This is a client-side networking issue.`;
-          throw new Error(errorMsg);
-        }
-        throw fetchError;
-      }
+      console.log(`✅ Upload successful (attempt ${retryCount + 1}):`, {
+        status: response.status,
+        hasData: !!response.data,
+      });
 
-      // Read response as text
-      const responseText = await response.text();
-      console.log(`📥 Upload response status (attempt ${retryCount + 1}):`, response.status);
-      console.log('📥 Upload response text (first 200 chars):', responseText.substring(0, 200));
-
-      // Parse JSON response
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('❌ Failed to parse response as JSON:', responseText);
-        throw new Error(`Server returned invalid response. Status: ${response.status}`);
-      }
-
-      // Check for HTTP errors
-      if (!response.ok) {
-        const errorMsg = result.error || result.message || `Upload failed with status ${response.status}`;
-        
-        // Retry on 5xx errors (server errors) if we have retries left
-        if (response.status >= 500 && retryCount < MAX_RETRIES) {
-          console.log(`🔄 Server error ${response.status}, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
-        }
-        
-        throw new Error(errorMsg);
-      }
+      const result = response.data;
 
       // Check for error in response body
       if (result.error) {
@@ -848,25 +611,34 @@ class ApiClient {
       };
     } catch (error) {
       console.error(`❌ Upload error (attempt ${retryCount + 1}):`, error);
-      console.error('Error type:', error.constructor.name);
-      console.error('Error message:', error.message);
       
-      // If this is a retryable error and we haven't exhausted retries, retry
-      const isRetryable = error.message && (
-        error.message.includes('Network request failed') || 
-        error.message.includes('Failed to fetch') || 
-        error.message.includes('timeout') ||
-        error.message.includes('Cannot reach')
-      );
-      
-      if (isRetryable && retryCount < MAX_RETRIES) {
-        console.log(`🔄 Retryable error detected, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-        return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
-      }
-      
-      // Provide user-friendly error messages
-      if (error.message && (error.message.includes('Network request failed') || error.message.includes('Failed to fetch') || error.message.includes('Cannot reach'))) {
+      // Handle axios errors
+      if (error.response) {
+        // Server responded with error status
+        const result = error.response.data || {};
+        const errorMsg = result.error || result.message || `Upload failed with status ${error.response.status}`;
+        
+        // Retry on 5xx errors (server errors) if we have retries left
+        if (error.response.status >= 500 && retryCount < MAX_RETRIES) {
+          console.log(`🔄 Server error ${error.response.status}, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+        }
+        
+        throw new Error(errorMsg);
+      } else if (error.request) {
+        // Request was made but no response received
+        const isRetryable = error.code === 'ECONNABORTED' || 
+                          error.message?.includes('Network request failed') || 
+                          error.message?.includes('timeout') ||
+                          error.message?.includes('Cannot reach');
+        
+        if (isRetryable && retryCount < MAX_RETRIES) {
+          console.log(`🔄 Network error, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+        }
+        
         const diagnosticMsg = `Network error: Cannot reach ${this.baseUrl}/api/upload\n\n` +
           `Current configuration: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}\n\n` +
           `Troubleshooting:\n` +
@@ -879,9 +651,16 @@ class ApiClient {
               `   - Make sure admin server is running: cd admin && npm run dev\n`
             : `3. For Vercel: Verify https://admin-orcin-omega.vercel.app is accessible\n`)
         throw new Error(diagnosticMsg);
+      } else if (error.code === 'ECONNABORTED') {
+        // Timeout
+        if (retryCount < MAX_RETRIES) {
+          console.log(`⏳ Upload timeout, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
+        }
+        throw new Error(`Upload timeout: The request took too long. URL: ${url}`);
       }
       
-      // Re-throw with original message
       throw error;
     }
   }

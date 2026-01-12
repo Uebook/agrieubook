@@ -367,7 +367,7 @@ const EditProfileScreen = ({ navigation }) => {
     try {
       // Get user ID from context or AsyncStorage
       let targetUserId = userId || userData?.id;
-      
+
       // If userId is not available from context, try to get from AsyncStorage
       if (!targetUserId) {
         const USER_STORAGE_KEY = '@agribook_user';
@@ -416,15 +416,31 @@ const EditProfileScreen = ({ navigation }) => {
       // Strategy: If no profile picture, use the simpler updateUser endpoint
       // If profile picture exists, use the FormData endpoint
       let response;
-      
-      if (avatarFile && avatarFile.path && !avatarFile.path.startsWith('http')) {
+
+      if (avatarFile && avatarFile.path) {
         // Has profile picture - use FormData endpoint
+        // Normalize path for react-native-image-crop-picker
+        // react-native-image-crop-picker returns absolute paths like "/storage/emulated/0/..."
+        // React Native FormData needs file:// URI format
+        let fileUri = avatarFile.path;
+        if (!fileUri.startsWith('file://') && !fileUri.startsWith('content://') && !fileUri.startsWith('http')) {
+          // Convert absolute path to file:// URI
+          fileUri = fileUri.startsWith('/') ? `file://${fileUri}` : `file:///${fileUri}`;
+        }
+        
+        console.log('📝 Preparing profile picture for upload:', {
+          originalPath: avatarFile.path,
+          normalizedUri: fileUri.substring(0, 50),
+          mime: avatarFile.mime,
+          filename: avatarFile.filename,
+        });
+        
         formPayload.append('profile_picture', {
-          uri: avatarFile.path,
+          uri: fileUri,
           type: avatarFile.mime || 'image/jpeg',
           name: avatarFile.filename || `profile_${Date.now()}.jpg`,
         });
-        
+
         console.log('📤 Calling updateProfile with FormData (includes image)');
         // API call with FormData
         response = await apiClient.updateProfile(formPayload);
@@ -442,9 +458,9 @@ const EditProfileScreen = ({ navigation }) => {
           pincode: formData.pincode?.trim() || null,
           website: formData.website?.trim() || null,
         };
-        
+
         response = await apiClient.updateUser(targetUserId, updatePayload);
-        
+
         // Normalize response format
         if (response.user) {
           response = {
@@ -484,9 +500,9 @@ const EditProfileScreen = ({ navigation }) => {
         details: error.details,
         stack: error.stack,
       });
-      
+
       let errorMessage = error.message || error.error || 'Failed to update profile. Please try again.';
-      
+
       // Provide more helpful error messages
       if (error.message && error.message.includes('Network request failed')) {
         errorMessage = `Network error: Cannot reach the server.\n\nPlease check:\n1. Internet connection\n2. Try again in a moment\n3. If problem persists, restart the app`;
@@ -495,7 +511,7 @@ const EditProfileScreen = ({ navigation }) => {
       } else if (error.details) {
         errorMessage = `${error.message}\n\nDetails: ${error.details}`;
       }
-      
+
       Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
