@@ -598,8 +598,8 @@ const BookUploadScreen = ({ navigation }) => {
             const uploadResult = await apiClient.uploadFile(
               coverImageFile,
               'audio-books',
-              'covers',
-              userId
+              'covers'
+              // Removed userId parameter to match profile upload pattern
             );
             // Safely extract URL using bracket notation and 'in' operator
             if (uploadResult && typeof uploadResult === 'object' && !(uploadResult instanceof Error)) {
