@@ -11,9 +11,9 @@ import axios from 'axios';
 const USE_LOCAL_SERVER = false; // Set to true to use local development server
 
 const API_BASE_URL = USE_LOCAL_SERVER
-  ? (__DEV__ 
-      ? 'http://10.0.2.2:3000' // Android emulator - use 10.0.2.2
-      : 'http://YOUR_IP:3000') // Physical device - replace YOUR_IP with your computer's IP (e.g., 192.168.1.100)
+  ? (__DEV__
+    ? 'http://10.0.2.2:3000' // Android emulator - use 10.0.2.2
+    : 'http://YOUR_IP:3000') // Physical device - replace YOUR_IP with your computer's IP (e.g., 192.168.1.100)
   : 'https://admin-orcin-omega.vercel.app'; // Production Vercel URL (default)
 
 // Log the API URL being used for debugging
@@ -31,9 +31,9 @@ class ApiClient {
   async request(endpoint, options = {}) {
     const url = `${this.baseUrl}${endpoint}`;
     const method = options.method || 'GET';
-    
+
     console.log('API Request (axios):', { url, method, baseUrl: this.baseUrl });
-    
+
     try {
       const config = {
         method,
@@ -63,7 +63,7 @@ class ApiClient {
         errorMessage: error.message,
         usingLocalServer: USE_LOCAL_SERVER,
       });
-      
+
       // Handle axios errors
       if (error.response) {
         // Server responded with error status
@@ -87,7 +87,7 @@ class ApiClient {
       } else if (error.code === 'ECONNABORTED') {
         throw new Error(`Request timeout: ${url}. Please check your internet connection.`);
       }
-      
+
       throw error;
     }
   }
@@ -120,7 +120,7 @@ class ApiClient {
       console.log('📤 Creating book with FormData (axios)...');
       console.log('📤 Request URL:', url);
       console.log('📤 FormData keys:', formData._parts ? formData._parts.map((p) => p[0]) : 'unknown');
-      
+
       try {
         // Log FormData structure for debugging
         if (formData._parts) {
@@ -134,7 +134,7 @@ class ApiClient {
             })),
           });
         }
-        
+
         const response = await axios.post(url, formData, {
           headers: {
             'Accept': '*/*',
@@ -144,7 +144,7 @@ class ApiClient {
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
         });
-        
+
         console.log('✅ Book created successfully:', {
           bookId: response.data?.book?.id,
           title: response.data?.book?.title,
@@ -154,7 +154,7 @@ class ApiClient {
         return response.data;
       } catch (error) {
         console.error('❌ Error creating book with FormData:', error);
-        
+
         if (error.response) {
           const errorData = error.response.data || {};
           const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${error.response.status}`;
@@ -178,7 +178,7 @@ class ApiClient {
         } else if (error.code === 'ECONNABORTED') {
           throw new Error(`Request timeout: ${url}. The request took too long (120s). Try with smaller files or check Vercel function timeout.`);
         }
-        
+
         throw error;
       }
     } else {
@@ -270,7 +270,7 @@ class ApiClient {
   // Update profile with FormData (supports file upload) - Using axios
   async updateProfile(formData) {
     const url = `${this.baseUrl}/api/profile/update`;
-    
+
     console.log('📤 Updating profile with axios:', {
       url,
       baseUrl: this.baseUrl,
@@ -278,7 +278,7 @@ class ApiClient {
       usingLocalServer: USE_LOCAL_SERVER,
       isDev: __DEV__,
     });
-    
+
     // Log FormData structure for debugging
     if (formData._parts) {
       console.log('📦 FormData structure:', formData._parts.map((part, index) => ({
@@ -287,16 +287,16 @@ class ApiClient {
         valueType: typeof part[1],
         valueIsObject: typeof part[1] === 'object',
         valueKeys: typeof part[1] === 'object' ? Object.keys(part[1] || {}) : [],
-        valuePreview: typeof part[1] === 'string' 
-          ? part[1].substring(0, 50) 
+        valuePreview: typeof part[1] === 'string'
+          ? part[1].substring(0, 50)
           : typeof part[1] === 'object' && part[1]?.uri
-          ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
-          : typeof part[1] === 'object' && part[1]?.path
-          ? `{path: ${part[1].path.substring(0, 30)}..., type: ${part[1].type || part[1].mime}, name: ${part[1].name || part[1].filename}}`
-          : String(part[1]).substring(0, 50),
+            ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
+            : typeof part[1] === 'object' && part[1]?.path
+              ? `{path: ${part[1].path.substring(0, 30)}..., type: ${part[1].type || part[1].mime}, name: ${part[1].name || part[1].filename}}`
+              : String(part[1]).substring(0, 50),
       })));
     }
-    
+
     try {
       // Use axios for FormData uploads
       const response = await axios.post(url, formData, {
@@ -308,17 +308,17 @@ class ApiClient {
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
       });
-      
+
       console.log('✅ Axios request completed:', {
         status: response.status,
         statusText: response.statusText,
         dataKeys: response.data ? Object.keys(response.data) : [],
       });
-      
+
       return response.data;
     } catch (error) {
       console.error('❌ Profile update error (axios):', error);
-      
+
       // Enhanced error logging
       if (error.response) {
         // Server responded with error status
@@ -327,7 +327,7 @@ class ApiClient {
           statusText: error.response.statusText,
           data: error.response.data,
         });
-        
+
         const errorData = error.response.data || {};
         const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${error.response.status}`;
         const axiosError = new Error(errorMessage);
@@ -344,7 +344,7 @@ class ApiClient {
           errorCode: error.code,
           errorMessage: error.message,
         });
-        
+
         throw new Error(
           `Network error: Cannot reach ${url}\n\n` +
           `Please check:\n` +
@@ -363,7 +363,7 @@ class ApiClient {
           baseUrl: this.baseUrl,
           stack: error.stack,
         });
-        
+
         throw error;
       }
     }
@@ -403,7 +403,7 @@ class ApiClient {
   // Upload API - SIMPLIFIED AND RELIABLE WITH RETRY LOGIC
   async uploadFile(file, bucket, folder, authorId = null, retryCount = 0) {
     const MAX_RETRIES = 2; // Retry up to 2 times (3 total attempts)
-    
+
     // Validate inputs
     if (!file) {
       throw new Error('File is required');
@@ -443,7 +443,7 @@ class ApiClient {
         normalizedUri = 'file:///' + normalizedUri;
       }
     }
-    
+
     console.log('📄 Normalized URI:', {
       original: fileUri.substring(0, 50),
       normalized: normalizedUri.substring(0, 50),
@@ -465,7 +465,7 @@ class ApiClient {
         // If decoding fails, use as is
       }
     }
-    
+
     // Use the actual file type, or fallback based on file extension
     // Support both react-native-image-picker (type) and react-native-image-crop-picker (mime)
     let fileType = file.type || file.mime;
@@ -485,7 +485,7 @@ class ApiClient {
 
     // Create FormData - React Native format
     const formData = new FormData();
-    
+
     // Append file - React Native FormData format
     // This matches the OkHttp pattern: addFormDataPart("file", "", RequestBody.create(...))
     // For react-native-image-crop-picker: use path directly (absolute path like "/storage/emulated/0/...")
@@ -501,7 +501,7 @@ class ApiClient {
       fileUriForFormData = normalizedUri;
       console.log('📦 Using react-native-image-picker normalized URI');
     }
-    
+
     console.log('📦 File for FormData:', {
       hasPath: !!file.path,
       hasUri: !!file.uri,
@@ -510,13 +510,13 @@ class ApiClient {
       type: fileType,
       name: fileName,
     });
-    
+
     formData.append('file', {
       uri: fileUriForFormData,
       type: fileType,
       name: fileName,
     });
-    
+
     // Append other fields as strings
     formData.append('fileName', fileName);
     formData.append('fileType', fileType);
@@ -527,7 +527,7 @@ class ApiClient {
     if (authorId) {
       formData.append('author_id', String(authorId));
     }
-    
+
     // Log FormData structure for debugging
     console.log('📦 FormData created:', {
       fileName,
@@ -541,11 +541,11 @@ class ApiClient {
     });
 
     const url = `${this.baseUrl}/api/upload`;
-    
-    console.log(`📤 Uploading file (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, { 
-      fileName, 
-      fileType, 
-      bucket, 
+
+    console.log(`📤 Uploading file (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, {
+      fileName,
+      fileType,
+      bucket,
       folder,
       url,
       baseUrl: this.baseUrl,
@@ -560,11 +560,11 @@ class ApiClient {
         valueType: typeof part[1],
         valueIsObject: typeof part[1] === 'object',
         valueKeys: typeof part[1] === 'object' ? Object.keys(part[1] || {}) : [],
-        valuePreview: typeof part[1] === 'string' 
-          ? part[1].substring(0, 50) 
+        valuePreview: typeof part[1] === 'string'
+          ? part[1].substring(0, 50)
           : typeof part[1] === 'object' && part[1]?.uri
-          ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
-          : String(part[1]).substring(0, 50),
+            ? `{uri: ${part[1].uri.substring(0, 30)}..., type: ${part[1].type}, name: ${part[1].name}}`
+            : String(part[1]).substring(0, 50),
       })));
     }
 
@@ -579,7 +579,7 @@ class ApiClient {
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
       });
-      
+
       console.log(`✅ Upload successful (attempt ${retryCount + 1}):`, {
         status: response.status,
         hasData: !!response.data,
@@ -594,7 +594,7 @@ class ApiClient {
 
       // Extract URL - API should always return { success: true, url: string }
       const uploadUrl = result.url || result.publicUrl || result.signedUrl;
-      
+
       if (!uploadUrl || typeof uploadUrl !== 'string') {
         console.error('❌ No URL in response:', JSON.stringify(result, null, 2));
         throw new Error('Upload succeeded but no URL returned. Please try again.');
@@ -612,44 +612,44 @@ class ApiClient {
       };
     } catch (error) {
       console.error(`❌ Upload error (attempt ${retryCount + 1}):`, error);
-      
+
       // Handle axios errors
       if (error.response) {
         // Server responded with error status
         const result = error.response.data || {};
         const errorMsg = result.error || result.message || `Upload failed with status ${error.response.status}`;
-        
+
         // Retry on 5xx errors (server errors) if we have retries left
         if (error.response.status >= 500 && retryCount < MAX_RETRIES) {
           console.log(`🔄 Server error ${error.response.status}, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
           await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
           return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
         }
-        
+
         throw new Error(errorMsg);
       } else if (error.request) {
         // Request was made but no response received
-        const isRetryable = error.code === 'ECONNABORTED' || 
-                          error.message?.includes('Network request failed') || 
-                          error.message?.includes('timeout') ||
-                          error.message?.includes('Cannot reach');
-        
+        const isRetryable = error.code === 'ECONNABORTED' ||
+          error.message?.includes('Network request failed') ||
+          error.message?.includes('timeout') ||
+          error.message?.includes('Cannot reach');
+
         if (isRetryable && retryCount < MAX_RETRIES) {
           console.log(`🔄 Network error, retrying... (${retryCount + 1}/${MAX_RETRIES})`);
           await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
           return this.uploadFile(file, bucket, folder, authorId, retryCount + 1);
         }
-        
+
         const diagnosticMsg = `Network error: Cannot reach ${this.baseUrl}/api/upload\n\n` +
           `Current configuration: ${USE_LOCAL_SERVER ? 'LOCAL SERVER' : 'VERCEL PRODUCTION'}\n\n` +
           `Troubleshooting:\n` +
           `1. Check internet connection\n` +
           `2. Check if ${this.baseUrl} is accessible\n` +
-          (USE_LOCAL_SERVER 
+          (USE_LOCAL_SERVER
             ? `3. For local server:\n` +
-              `   - Android Emulator: Use http://10.0.2.2:3000\n` +
-              `   - Physical Device: Use http://YOUR_IP:3000\n` +
-              `   - Make sure admin server is running: cd admin && npm run dev\n`
+            `   - Android Emulator: Use http://10.0.2.2:3000\n` +
+            `   - Physical Device: Use http://YOUR_IP:3000\n` +
+            `   - Make sure admin server is running: cd admin && npm run dev\n`
             : `3. For Vercel: Verify https://admin-orcin-omega.vercel.app is accessible\n`)
         throw new Error(diagnosticMsg);
       } else if (error.code === 'ECONNABORTED') {
@@ -661,7 +661,7 @@ class ApiClient {
         }
         throw new Error(`Upload timeout: The request took too long. URL: ${url}`);
       }
-      
+
       throw error;
     }
   }

@@ -1,9 +1,4 @@
-/**
- * Edit Profile Screen
- * Allows users to edit their profile information
- */
-
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,695 +6,333 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   Image,
   ActivityIndicator,
+  Alert,
+  Platform,
 } from 'react-native';
+import axios from 'axios';
 import ImagePicker from 'react-native-image-crop-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Header from '../../components/common/Header';
-import { userProfile } from '../../services/dummyData';
+import supabase from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { useSettings } from '../../context/SettingsContext';
-import apiClient from '../../services/api';
-import {
-  requestPermissionWithFallback,
-  PERMISSIONS,
-} from '../../utils/permissions';
 
-// Create InputField component OUTSIDE to prevent recreation
-const InputField = memo(({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType = 'default',
-  multiline = false,
-  required = false,
-  styles,
-  placeholderColor,
-  loading = false,
-}) => {
-  return (
-    <View style={styles.inputGroup}>
-      <Text style={styles.label}>
-        {label} {required && <Text style={styles.required}>*</Text>}
-      </Text>
-      <TextInput
-        style={[styles.input, multiline && styles.textArea]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={placeholderColor}
-        keyboardType={keyboardType}
-        multiline={multiline}
-        numberOfLines={multiline ? 4 : 1}
-        blurOnSubmit={!multiline}
-        returnKeyType={multiline ? 'default' : 'next'}
-        editable={!loading}
-      />
-    </View>
-  );
-}, (prevProps, nextProps) => {
-  // Only re-render if value or other important props change
-  // onChangeText is stable via useCallback, so we don't need to compare it
-  return (
-    prevProps.value === nextProps.value &&
-    prevProps.label === nextProps.label &&
-    prevProps.placeholder === nextProps.placeholder &&
-    prevProps.keyboardType === nextProps.keyboardType &&
-    prevProps.multiline === nextProps.multiline &&
-    prevProps.required === nextProps.required &&
-    prevProps.loading === nextProps.loading
-  );
-});
+const API_BASE_URL = 'https://admin-orcin-omega.vercel.app';
 
-const EditProfileScreen = ({ navigation }) => {
-  const { getThemeColors, getFontSizeMultiplier } = useSettings();
-  const themeColors = getThemeColors();
-  const fontSizeMultiplier = getFontSizeMultiplier();
-  const { userRole, userData, userId, updateUserData } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [avatarUri, setAvatarUri] = useState(userData?.avatar_url || null);
-  const [avatarFile, setAvatarFile] = useState(null); // Store selected file for upload
-  const [formData, setFormData] = useState({
-    name: userData?.name || userProfile.name,
-    email: userData?.email || userProfile.email || '',
-    mobile: userData?.mobile || userProfile.mobile || '',
-    bio: userData?.bio || '',
-    address: userData?.address || '',
-    city: userData?.city || '',
-    state: userData?.state || '',
-    pincode: userData?.pincode || '',
-    website: userData?.website || '',
+const EditProfileScreen = ({ navigation, route }) => {
+  // Get user from auth context or route params
+  const { userData: authUser } = useAuth();
+  const routeUser = route?.params?.user || {};
+  const user = authUser || routeUser;
+
+  const [form, setForm] = useState({
+    name: user?.name || '',
+    email: user?.email || '',
+    mobile: user?.mobile || '',
+    bio: user?.bio || '',
   });
 
-  // Load user data on mount
-  useEffect(() => {
-    const loadUserData = async () => {
-      if (userId && !userData) {
-        try {
-          const response = await apiClient.getUser(userId);
-          const user = response.user;
-          if (user) {
-            setFormData({
-              name: user.name || '',
-              email: user.email || '',
-              mobile: user.mobile || '',
-              bio: user.bio || '',
-              address: user.address || '',
-              city: user.city || '',
-              state: user.state || '',
-              pincode: user.pincode || '',
-              website: user.website || '',
-            });
-            setAvatarUri(user.avatar_url || null);
-          }
-        } catch (error) {
-          console.error('Error loading user data:', error);
-        }
-      }
-    };
-    loadUserData();
-  }, [userId, userData]);
-
-  const handleInputChange = useCallback((field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  }, []);
-
-  // Create stable callback functions for each input field
-  const handleNameChange = useCallback((value) => handleInputChange('name', value), [handleInputChange]);
-  const handleEmailChange = useCallback((value) => handleInputChange('email', value), [handleInputChange]);
-  const handleMobileChange = useCallback((value) => handleInputChange('mobile', value), [handleInputChange]);
-  const handleBioChange = useCallback((value) => handleInputChange('bio', value), [handleInputChange]);
-  const handleAddressChange = useCallback((value) => handleInputChange('address', value), [handleInputChange]);
-  const handleCityChange = useCallback((value) => handleInputChange('city', value), [handleInputChange]);
-  const handleStateChange = useCallback((value) => handleInputChange('state', value), [handleInputChange]);
-  const handlePincodeChange = useCallback((value) => handleInputChange('pincode', value), [handleInputChange]);
-  const handleWebsiteChange = useCallback((value) => handleInputChange('website', value), [handleInputChange]);
-
-  // Memoize styles FIRST to ensure it's stable before InputField uses it
-  const styles = useMemo(() => StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: themeColors.background.primary,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    content: {
-      padding: 20,
-    },
-    avatarSection: {
-      alignItems: 'center',
-      marginBottom: 32,
-      paddingVertical: 20,
-    },
-    avatarContainer: {
-      alignItems: 'center',
-    },
-    avatar: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: themeColors.primary.main,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 12,
-      overflow: 'hidden',
-      position: 'relative',
-    },
-    avatarImage: {
-      width: '100%',
-      height: '100%',
-    },
-    avatarText: {
-      fontSize: 36 * fontSizeMultiplier,
-      fontWeight: 'bold',
-      color: themeColors.text.light,
-    },
-    avatarLoadingOverlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    changePhotoButton: {
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-    },
-    changePhotoText: {
-      fontSize: 14 * fontSizeMultiplier,
-      color: themeColors.primary.main,
-      fontWeight: '500',
-    },
-    sectionTitle: {
-      fontSize: 18 * fontSizeMultiplier,
-      fontWeight: 'bold',
-      color: themeColors.text.primary,
-      marginTop: 24,
-      marginBottom: 16,
-    },
-    inputGroup: {
-      marginBottom: 16,
-    },
-    label: {
-      fontSize: 14 * fontSizeMultiplier,
-      fontWeight: '600',
-      color: themeColors.text.primary,
-      marginBottom: 8,
-    },
-    required: {
-      color: themeColors.error || '#F44336',
-    },
-    input: {
-      backgroundColor: themeColors.input.background,
-      borderWidth: 1,
-      borderColor: themeColors.input.border,
-      borderRadius: 8,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      fontSize: 16 * fontSizeMultiplier,
-      color: themeColors.input.text,
-    },
-    textArea: {
-      height: 100,
-      textAlignVertical: 'top',
-      paddingTop: 12,
-    },
-    row: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 12,
-    },
-    halfWidth: {
-      flex: 1,
-    },
-    saveButton: {
-      backgroundColor: themeColors.button.primary,
-      borderRadius: 8,
-      paddingVertical: 16,
-      alignItems: 'center',
-      marginTop: 24,
-      marginBottom: 16,
-    },
-    saveButtonText: {
-      color: themeColors.button.text,
-      fontSize: 16 * fontSizeMultiplier,
-      fontWeight: 'bold',
-    },
-    saveButtonDisabled: {
-      opacity: 0.6,
-    },
-    helpText: {
-      fontSize: 12 * fontSizeMultiplier,
-      color: themeColors.text.tertiary,
-      textAlign: 'center',
-      lineHeight: 18 * fontSizeMultiplier,
-    },
-  }), [themeColors, fontSizeMultiplier]);
-
-  // Memoize placeholder color separately
-  const placeholderColor = useMemo(() => themeColors.input.placeholder, [themeColors.input.placeholder]);
-
-  const selectImageFromCamera = useCallback(async () => {
-    const hasPermission = await requestPermissionWithFallback(
-      PERMISSIONS.CAMERA,
-      'Camera'
-    );
-    if (!hasPermission) {
-      return;
-    }
-
+  const [avatarUri, setAvatarUri] = useState(user?.avatar_url || null);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  // useEffect(() => {
+  //   fetch('https://admin-orcin-omega.vercel.app')
+  //     .then(() => console.log('✅ Network OK'))
+  //     .catch(e => console.log('❌ Network FAILED', e));
+  // }, []);
+  const pickImage = async (camera = false) => {
     try {
-      const img = await ImagePicker.openCamera({
-        width: 600,
-        height: 600,
-        cropping: true,
-        compressImageQuality: 0.8,
-      });
-      setAvatarUri(img.path || '');
+      const img = camera
+        ? await ImagePicker.openCamera({ width: 600, height: 600, cropping: true, compressImageQuality: 0.05, })
+        : await ImagePicker.openPicker({ width: 600, height: 600, cropping: true, compressImageQuality: 0.05, });
+
+      setAvatarUri(img.path);
+      console.log(img.size);
       setAvatarFile({
-        path: img.path || '',
-        mime: img.mime || 'image/jpeg',
-        filename: img.filename || `avatar_${Date.now()}.jpg`,
+        path: img.path,
+        mime: img.mime,
+        name: img.filename || `avatar_${Date.now()}.jpg`,
       });
-    } catch (e) {
-      if (e?.code !== 'E_PICKER_CANCELLED') {
-        Alert.alert('Error', 'Failed to take photo');
-      }
-    }
-  }, []);
+    } catch (e) { }
+  };
 
-  const selectImageFromGallery = useCallback(async () => {
-    const hasPermission = await requestPermissionWithFallback(
-      PERMISSIONS.STORAGE,
-      'Storage'
-    );
-    if (!hasPermission) {
-      return;
-    }
+  const changePhoto = () => {
+    Alert.alert('Change Photo', 'Select option', [
+      { text: 'Camera', onPress: () => pickImage(true) },
+      { text: 'Gallery', onPress: () => pickImage(false) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
 
+  // Upload avatar to Supabase Storage
+  const uploadAvatarToSupabase = async (file, userId) => {
     try {
-      const img = await ImagePicker.openPicker({
-        width: 600,
-        height: 600,
-        cropping: true,
-        compressImageQuality: 0.8,
+      const fileName = `${userId}/${Date.now()}-${file.name || `avatar_${Date.now()}.jpg`}`;
+
+      // Convert file path to blob for React Native
+      const response = await fetch(file.path);
+      const blob = await response.blob();
+
+      console.log('📤 Uploading avatar to Supabase:', {
+        fileName,
+        bucket: 'avatars',
+        mimeType: file.mime || 'image/jpeg',
       });
-      setAvatarUri(img.path || '');
-      setAvatarFile({
-        path: img.path || '',
-        mime: img.mime || 'image/jpeg',
-        filename: img.filename || `avatar_${Date.now()}.jpg`,
-      });
-    } catch (e) {
-      if (e?.code !== 'E_PICKER_CANCELLED') {
-        Alert.alert('Error', 'Failed to pick image');
+
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, blob, {
+          contentType: file.mime || 'image/jpeg',
+          upsert: true,
+        });
+
+      if (error) {
+        console.error('❌ Supabase upload error:', error);
+        throw error;
       }
+
+      console.log('✅ Avatar uploaded to Supabase:', fileName);
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      return urlData.publicUrl;
+    } catch (error) {
+      console.error('❌ Error uploading avatar to Supabase:', error);
+      throw error;
     }
-  }, []);
+  };
 
-  const handleChangePhoto = useCallback(() => {
-    Alert.alert(
-      'Change Profile Photo',
-      'Choose an option',
-      [
-        {
-          text: 'Camera',
-          onPress: selectImageFromCamera,
-        },
-        {
-          text: 'Gallery',
-          onPress: selectImageFromGallery,
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ],
-      { cancelable: true }
-    );
-  }, [selectImageFromCamera, selectImageFromGallery]);
-
-  const handleSave = async () => {
-    // Validation
-    if (!formData.name || formData.name.trim().length < 2) {
-      Alert.alert('Validation', 'Enter a valid full name');
+  const updateProfile = async () => {
+    if (!form.name.trim()) {
+      Alert.alert('Validation', 'Name is required');
       return;
     }
 
-    if (formData.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) {
-      Alert.alert('Validation', 'Enter a valid email');
+    if (!user?.id) {
+      Alert.alert('Error', 'User ID not found. Please login again.');
       return;
     }
 
     setLoading(true);
+    setUploading(true);
 
     try {
-      // Get user ID from context or AsyncStorage
-      let targetUserId = userId || userData?.id;
+      let avatarUrl = avatarUri;
 
-      // If userId is not available from context, try to get from AsyncStorage
-      if (!targetUserId) {
-        const USER_STORAGE_KEY = '@agribook_user';
-        const raw = await AsyncStorage.getItem(USER_STORAGE_KEY);
-        const user = raw ? JSON.parse(raw) : null;
-        targetUserId = user?.id;
+      // Upload to Supabase first if new avatar selected
+      if (avatarFile?.path) {
+        console.log('📤 Uploading avatar to Supabase...');
+        avatarUrl = await uploadAvatarToSupabase(avatarFile, user.id);
+        console.log('✅ Avatar uploaded, URL:', avatarUrl?.substring(0, 50) + '...');
       }
 
-      // Also check auth storage as fallback
-      if (!targetUserId) {
-        const AUTH_STORAGE_KEY = '@agribook_auth';
-        const authRaw = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
-        const auth = authRaw ? JSON.parse(authRaw) : null;
-        targetUserId = auth?.userId;
-      }
+      // Call API with JSON only (no FormData)
+      const payload = {
+        user_id: user.id,
+        full_name: form.name,
+        email: form.email || null,
+        phone: form.mobile || null,
+        bio: form.bio || null,
+        avatar_url: avatarUrl || null,
+      };
 
-      if (!targetUserId) {
-        throw new Error('Not authenticated. Please log in again.');
-      }
-
-      // Prepare multipart form
-      const formPayload = new FormData();
-      formPayload.append('user_id', targetUserId);
-      formPayload.append('full_name', formData.name.trim());
-      formPayload.append('email', formData.email.trim() || '');
-      formPayload.append('phone', formData.mobile.trim() || '');
-      formPayload.append('address', formData.address.trim() || '');
-      formPayload.append('bio', formData.bio?.trim() || '');
-      formPayload.append('city', formData.city?.trim() || '');
-      formPayload.append('state', formData.state?.trim() || '');
-      formPayload.append('pincode', formData.pincode?.trim() || '');
-      formPayload.append('website', formData.website?.trim() || '');
-
-      // Validate user_id is a UUID format
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(targetUserId)) {
-        throw new Error(`Invalid user ID format. Expected UUID, got: ${targetUserId}. Please log in again.`);
-      }
-
-      console.log('📝 Profile update request:', {
-        userId: targetUserId,
-        hasAvatar: !!(avatarFile && avatarFile.path && !avatarFile.path.startsWith('http')),
-        formDataKeys: formPayload._parts ? formPayload._parts.map(p => p[0]) : [],
+      console.log('📤 Sending profile update to API:', {
+        user_id: payload.user_id,
+        hasAvatar: !!avatarUrl,
       });
 
-      // Strategy: If no profile picture, use the simpler updateUser endpoint
-      // If profile picture exists, use the FormData endpoint
-      let response;
-
-      if (avatarFile && avatarFile.path) {
-        // Has profile picture - use FormData endpoint
-        // Normalize path for react-native-image-crop-picker
-        // react-native-image-crop-picker returns absolute paths like "/storage/emulated/0/..."
-        // React Native FormData needs file:// URI format
-        let fileUri = avatarFile.path;
-        if (!fileUri.startsWith('file://') && !fileUri.startsWith('content://') && !fileUri.startsWith('http')) {
-          // Convert absolute path to file:// URI
-          fileUri = fileUri.startsWith('/') ? `file://${fileUri}` : `file:///${fileUri}`;
+      const res = await axios.post(
+        `${API_BASE_URL}/api/profile/update`,
+        payload,
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 30000,
         }
-        
-        console.log('📝 Preparing profile picture for upload:', {
-          originalPath: avatarFile.path,
-          normalizedUri: fileUri.substring(0, 50),
-          mime: avatarFile.mime,
-          filename: avatarFile.filename,
-        });
-        
-        formPayload.append('profile_picture', {
-          uri: fileUri,
-          type: avatarFile.mime || 'image/jpeg',
-          name: avatarFile.filename || `profile_${Date.now()}.jpg`,
-        });
+      );
 
-        console.log('📤 Calling updateProfile with FormData (includes image)');
-        // API call with FormData
-        response = await apiClient.updateProfile(formPayload);
-      } else {
-        console.log('📤 Calling updateUser with JSON (no image)');
-        // No profile picture - use simpler JSON endpoint
-        const updatePayload = {
-          name: formData.name.trim(),
-          email: formData.email.trim() || null,
-          mobile: formData.mobile.trim() || null,
-          bio: formData.bio?.trim() || null,
-          address: formData.address.trim() || null,
-          city: formData.city?.trim() || null,
-          state: formData.state?.trim() || null,
-          pincode: formData.pincode?.trim() || null,
-          website: formData.website?.trim() || null,
-        };
-
-        response = await apiClient.updateUser(targetUserId, updatePayload);
-
-        // Normalize response format
-        if (response.user) {
-          response = {
-            success: true,
-            message: 'Profile updated successfully',
-            data: response.user,
-          };
-        }
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || res.data?.error || 'Update failed');
       }
 
-      if (!response?.success) {
-        throw new Error(response?.message || 'Update failed');
-      }
+      console.log('✅ Profile updated successfully');
 
-      const updatedProfile = response.data || response;
-
-      // Update auth context
-      await updateUserData({
-        ...userData,
-        ...updatedProfile,
-        avatar_url: updatedProfile.profile_picture || updatedProfile.avatar_url || avatarUri,
-      });
-
-      // Cache profile locally using the same key as AuthContext
-      const USER_STORAGE_KEY = '@agribook_user';
-      await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedProfile));
-
-      Alert.alert('Success', 'Profile updated successfully!', [
+      Alert.alert('Success', 'Profile updated successfully', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
-    } catch (error) {
-      console.error('❌ Profile update error:', error);
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        status: error.status,
-        details: error.details,
-        stack: error.stack,
-      });
 
-      let errorMessage = error.message || error.error || 'Failed to update profile. Please try again.';
+    } catch (err) {
+      console.error('❌ Profile update error:', err);
 
-      // Provide more helpful error messages
-      if (error.message && error.message.includes('Network request failed')) {
-        errorMessage = `Network error: Cannot reach the server.\n\nPlease check:\n1. Internet connection\n2. Try again in a moment\n3. If problem persists, restart the app`;
-      } else if (error.message && error.message.includes('Invalid user ID')) {
-        errorMessage = error.message;
-      } else if (error.details) {
-        errorMessage = `${error.message}\n\nDetails: ${error.details}`;
-      }
-
-      Alert.alert('Error', errorMessage);
+      Alert.alert(
+        'Error',
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Profile update failed'
+      );
     } finally {
       setLoading(false);
+      setUploading(false);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Header title="Edit Profile" navigation={navigation} />
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
-          {/* Profile Picture Section */}
-          <View style={styles.avatarSection}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                {avatarUri ? (
-                  <Image
-                    source={{ uri: avatarUri }}
-                    style={styles.avatarImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Text style={styles.avatarText}>
-                    {formData.name
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')
-                      .toUpperCase()
-                      .slice(0, 2)}
-                  </Text>
-                )}
-                {uploadingAvatar && (
-                  <View style={styles.avatarLoadingOverlay}>
-                    <ActivityIndicator size="small" color={themeColors.text.light} />
-                  </View>
-                )}
-              </View>
-              <TouchableOpacity
-                style={styles.changePhotoButton}
-                onPress={handleChangePhoto}
-                disabled={uploadingAvatar || loading}
-              >
-                <Text style={styles.changePhotoText}>
-                  {uploadingAvatar ? 'Uploading...' : 'Change Photo'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.card}>
 
-          {/* Personal Information */}
-          <Text style={styles.sectionTitle}>Personal Information</Text>
-
-          <InputField
-            label="Full Name"
-            value={formData.name}
-            onChangeText={handleNameChange}
-            placeholder="Enter your full name"
-            required={true}
-            styles={styles}
-            placeholderColor={placeholderColor}
-            loading={loading}
-          />
-
-          <InputField
-            label="Email"
-            value={formData.email}
-            onChangeText={handleEmailChange}
-            placeholder="Enter your email"
-            keyboardType="email-address"
-            required={true}
-            styles={styles}
-            placeholderColor={placeholderColor}
-            loading={loading}
-          />
-
-          <InputField
-            label="Mobile Number"
-            value={formData.mobile}
-            onChangeText={handleMobileChange}
-            placeholder="Enter your mobile number"
-            keyboardType="phone-pad"
-            required={true}
-            styles={styles}
-            placeholderColor={placeholderColor}
-            loading={loading}
-          />
-
-          {/* Bio Section */}
-          <InputField
-            label="Bio"
-            value={formData.bio}
-            onChangeText={handleBioChange}
-            placeholder="Tell us about yourself..."
-            multiline={true}
-            styles={styles}
-            placeholderColor={placeholderColor}
-            loading={loading}
-          />
-
-          {/* Address Information */}
-          <Text style={styles.sectionTitle}>Address Information</Text>
-
-          <InputField
-            label="Address"
-            value={formData.address}
-            onChangeText={handleAddressChange}
-            placeholder="Enter your address"
-            multiline={true}
-            styles={styles}
-            placeholderColor={placeholderColor}
-            loading={loading}
-          />
-
-          <View style={styles.row}>
-            <View style={styles.halfWidth}>
-              <InputField
-                label="City"
-                value={formData.city}
-                onChangeText={handleCityChange}
-                placeholder="City"
-                styles={styles}
-                placeholderColor={placeholderColor}
-                loading={loading}
-              />
-            </View>
-            <View style={styles.halfWidth}>
-              <InputField
-                label="State"
-                value={formData.state}
-                onChangeText={handleStateChange}
-                placeholder="State"
-                styles={styles}
-                placeholderColor={placeholderColor}
-                loading={loading}
-              />
-            </View>
-          </View>
-
-          <InputField
-            label="Pincode"
-            value={formData.pincode}
-            onChangeText={handlePincodeChange}
-            placeholder="Enter pincode"
-            keyboardType="numeric"
-            styles={styles}
-            placeholderColor={placeholderColor}
-            loading={loading}
-          />
-
-          {/* Additional Information */}
-          {userRole === 'author' && (
-            <>
-              <Text style={styles.sectionTitle}>Author Information</Text>
-              <InputField
-                label="Website"
-                value={formData.website}
-                onChangeText={handleWebsiteChange}
-                placeholder="https://yourwebsite.com"
-                keyboardType="url"
-                styles={styles}
-                placeholderColor={placeholderColor}
-                loading={loading}
-              />
-            </>
-          )}
-
-          {/* Save Button */}
-          <TouchableOpacity
-            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={themeColors.button.text} />
+          <TouchableOpacity style={styles.avatarWrap} onPress={changePhoto}>
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatar} />
             ) : (
-              <Text style={styles.saveButtonText}>Save Changes</Text>
+              <Text style={styles.avatarText}>+</Text>
+            )}
+
+            {uploading && (
+              <View style={styles.overlay}>
+                <ActivityIndicator color="#fff" />
+              </View>
             )}
           </TouchableOpacity>
 
-          <Text style={styles.helpText}>
-            * Required fields{'\n'}
-            Your profile information will be updated immediately.
-          </Text>
+          <Text style={styles.changeText}>Change Photo</Text>
+
+          <Input
+            label="Full Name"
+            value={form.name}
+            onChange={v => setForm({ ...form, name: v })}
+          />
+
+          <Input
+            label="Email"
+            value={form.email}
+            keyboardType="email-address"
+            onChange={v => setForm({ ...form, email: v })}
+          />
+
+          <Input
+            label="Mobile"
+            value={form.mobile}
+            keyboardType="phone-pad"
+            onChange={v => setForm({ ...form, mobile: v })}
+          />
+
+          <Input
+            label="Bio"
+            value={form.bio}
+            multiline
+            onChange={v => setForm({ ...form, bio: v })}
+          />
+
+          <TouchableOpacity
+            style={styles.saveBtn}
+            onPress={updateProfile}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.saveText}>Save Changes</Text>
+            )}
+          </TouchableOpacity>
+
         </View>
       </ScrollView>
     </View>
   );
 };
 
+const Input = ({ label, value, onChange, multiline, keyboardType }) => (
+  <View style={styles.inputGroup}>
+    <Text style={styles.label}>{label}</Text>
+    <TextInput
+      value={value}
+      onChangeText={onChange}
+      multiline={multiline}
+      keyboardType={keyboardType}
+      style={[styles.input, multiline && styles.textArea]}
+      placeholder={`Enter ${label}`}
+    />
+  </View>
+);
+
 export default EditProfileScreen;
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  card: {
+    margin: 16,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: '#fff',
+    elevation: 3,
+  },
+  avatarWrap: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: '#E5E7EB',
+    alignSelf: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarText: {
+    fontSize: 36,
+    color: '#6B7280',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  changeText: {
+    textAlign: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+    color: '#4F46E5',
+    fontWeight: '600',
+  },
+  inputGroup: {
+    marginBottom: 14,
+  },
+  label: {
+    marginBottom: 6,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#FAFAFA',
+  },
+  textArea: {
+    height: 90,
+    textAlignVertical: 'top',
+  },
+  saveBtn: {
+    marginTop: 24,
+    backgroundColor: '#4F46E5',
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  saveText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+});

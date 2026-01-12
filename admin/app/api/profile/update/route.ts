@@ -40,25 +40,25 @@ async function handleProfileUpdate(request: NextRequest) {
       contentType,
       method: request.method,
       url: request.url,
-      isMultipart: contentType.includes('multipart') || contentType.includes('form-data'),
+      isJSON: contentType.includes('application/json'),
     });
     
-    // Parse FormData
-    const formData = await request.formData();
+    // Parse JSON body (no more FormData)
+    const body = await request.json();
     
-    // Extract form fields
-    const userId = formData.get('user_id') as string | null;
-    const authorId = formData.get('author_id') as string | null;
-    const fullName = formData.get('full_name') as string | null;
-    const email = formData.get('email') as string | null;
-    const phone = formData.get('phone') as string | null;
-    const address = formData.get('address') as string | null;
-    const bio = formData.get('bio') as string | null;
-    const city = formData.get('city') as string | null;
-    const state = formData.get('state') as string | null;
-    const pincode = formData.get('pincode') as string | null;
-    const website = formData.get('website') as string | null;
-    const profilePicture = formData.get('profile_picture') as File | null;
+    // Extract fields from JSON body
+    const userId = body.user_id as string | null;
+    const authorId = body.author_id as string | null;
+    const fullName = body.full_name as string | null;
+    const email = body.email as string | null;
+    const phone = body.phone as string | null;
+    const address = body.address as string | null;
+    const bio = body.bio as string | null;
+    const city = body.city as string | null;
+    const state = body.state as string | null;
+    const pincode = body.pincode as string | null;
+    const website = body.website as string | null;
+    const avatarUrl = body.avatar_url as string | null; // Avatar URL from Supabase
     
     // Determine which user ID to use (user_id takes precedence over author_id)
     const targetUserId = userId || authorId;
@@ -102,96 +102,10 @@ async function handleProfileUpdate(request: NextRequest) {
       hasState: !!state,
       hasPincode: !!pincode,
       hasWebsite: !!website,
-      hasProfilePicture: !!profilePicture,
+      hasAvatarUrl: !!avatarUrl,
     });
     
     const supabase = createServerClient();
-    
-    // Handle profile picture upload if provided
-    let profilePictureUrl: string | null = null;
-    
-    if (profilePicture && profilePicture instanceof File) {
-      console.log('📤 Uploading profile picture...');
-      
-      try {
-        // Read file as Buffer
-        let fileBuffer: Buffer;
-        let fileName: string = 'profile.jpg';
-        let contentType: string = 'image/jpeg';
-        
-        const fileObj = profilePicture as any;
-        
-        // Read file based on type
-        if (fileObj instanceof File) {
-          const arrayBuffer = await fileObj.arrayBuffer();
-          fileBuffer = Buffer.from(arrayBuffer);
-          fileName = fileObj.name || `profile_${Date.now()}.jpg`;
-          contentType = fileObj.type || 'image/jpeg';
-        } else if (fileObj instanceof Blob) {
-          const arrayBuffer = await fileObj.arrayBuffer();
-          fileBuffer = Buffer.from(arrayBuffer);
-          contentType = fileObj.type || 'image/jpeg';
-        } else if (typeof fileObj?.arrayBuffer === 'function') {
-          const arrayBuffer = await fileObj.arrayBuffer();
-          fileBuffer = Buffer.from(arrayBuffer);
-        } else {
-          throw new Error('Unsupported file type');
-        }
-        
-        // Generate unique file name
-        // Path structure: {userId}/{timestamp}-{fileName}
-        // Don't include 'avatars' in path since bucket is already 'avatars'
-        const timestamp = Date.now();
-        const fileExt = fileName.split('.').pop() || 'jpg';
-        const uniqueFileName = `${targetUserId}/${timestamp}-${fileName}`;
-        
-        console.log('📤 Uploading to bucket "avatars" with path:', uniqueFileName);
-        
-        // Upload to Supabase Storage
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(uniqueFileName, fileBuffer, {
-            contentType: contentType,
-            cacheControl: '3600',
-            upsert: false,
-          });
-        
-        if (uploadError) {
-          console.error('❌ Error uploading profile picture:', uploadError);
-          console.error('Upload error details:', {
-            message: uploadError.message,
-            statusCode: (uploadError as any).statusCode,
-            error: uploadError,
-            path: uniqueFileName,
-            bucket: 'avatars',
-          });
-          // Continue without profile picture - don't fail the entire update
-        } else {
-          console.log('✅ File uploaded successfully to path:', uniqueFileName);
-          
-          // Get public URL
-          const { data: urlData } = supabase.storage
-            .from('avatars')
-            .getPublicUrl(uniqueFileName);
-          
-          // Also generate signed URL as fallback
-          const { data: signedUrlData } = await supabase.storage
-            .from('avatars')
-            .createSignedUrl(uniqueFileName, 31536000); // 1 year expiry
-          
-          profilePictureUrl = signedUrlData?.signedUrl || urlData.publicUrl;
-          console.log('✅ Profile picture uploaded successfully:', {
-            path: uniqueFileName,
-            publicUrl: urlData.publicUrl?.substring(0, 50) + '...',
-            signedUrl: signedUrlData?.signedUrl?.substring(0, 50) + '...',
-            finalUrl: profilePictureUrl?.substring(0, 50) + '...',
-          });
-        }
-      } catch (uploadError: any) {
-        console.error('Error processing profile picture:', uploadError);
-        // Continue without profile picture - don't fail the entire update
-      }
-    }
     
     // Prepare update data
     const updateData: any = {
@@ -225,8 +139,8 @@ async function handleProfileUpdate(request: NextRequest) {
     if (website !== null && website !== undefined) {
       updateData.website = website.trim() || null;
     }
-    if (profilePictureUrl) {
-      updateData.avatar_url = profilePictureUrl;
+    if (avatarUrl) {
+      updateData.avatar_url = avatarUrl;
     }
     
     console.log('📝 Updating user profile:', {
