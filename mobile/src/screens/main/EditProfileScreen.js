@@ -401,17 +401,45 @@ const EditProfileScreen = ({ navigation }) => {
       formPayload.append('pincode', formData.pincode?.trim() || '');
       formPayload.append('website', formData.website?.trim() || '');
 
-      // Add profile picture if selected
+      // Strategy: If no profile picture, use the simpler updateUser endpoint
+      // If profile picture exists, use the FormData endpoint
+      let response;
+      
       if (avatarFile && avatarFile.path && !avatarFile.path.startsWith('http')) {
+        // Has profile picture - use FormData endpoint
         formPayload.append('profile_picture', {
           uri: avatarFile.path,
           type: avatarFile.mime || 'image/jpeg',
           name: avatarFile.filename || `profile_${Date.now()}.jpg`,
         });
+        
+        // API call with FormData
+        response = await apiClient.updateProfile(formPayload);
+      } else {
+        // No profile picture - use simpler JSON endpoint
+        const updatePayload = {
+          name: formData.name.trim(),
+          email: formData.email.trim() || null,
+          mobile: formData.mobile.trim() || null,
+          bio: formData.bio?.trim() || null,
+          address: formData.address.trim() || null,
+          city: formData.city?.trim() || null,
+          state: formData.state?.trim() || null,
+          pincode: formData.pincode?.trim() || null,
+          website: formData.website?.trim() || null,
+        };
+        
+        response = await apiClient.updateUser(targetUserId, updatePayload);
+        
+        // Normalize response format
+        if (response.user) {
+          response = {
+            success: true,
+            message: 'Profile updated successfully',
+            data: response.user,
+          };
+        }
       }
-
-      // API call
-      const response = await apiClient.updateProfile(formPayload);
 
       if (!response?.success) {
         throw new Error(response?.message || 'Update failed');

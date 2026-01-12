@@ -340,6 +340,21 @@ class ApiClient {
       isDev: __DEV__,
     });
     
+    // First, test if the endpoint is reachable with a simple OPTIONS request
+    try {
+      console.log('🔍 Testing endpoint connectivity...');
+      const testResponse = await fetch(url, {
+        method: 'OPTIONS',
+        headers: {
+          'Accept': '*/*',
+        },
+      });
+      console.log('✅ Endpoint is reachable, OPTIONS status:', testResponse.status);
+    } catch (testError) {
+      console.warn('⚠️ Endpoint connectivity test failed:', testError.message);
+      // Continue anyway - might be a CORS preflight issue
+    }
+    
     // Log FormData structure for debugging
     if (formData._parts) {
       console.log('📦 FormData structure:', formData._parts.map((part, index) => ({
