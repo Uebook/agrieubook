@@ -5,15 +5,12 @@
  * To update: Get values from Supabase Dashboard → Settings → API
  */
 
-// Immediate log to verify module is loading
-console.log('🚀 SUPABASE MODULE STARTING - Line 1');
-
 import { createClient } from '@supabase/supabase-js';
 
 console.log('📦 Supabase module loading...');
-console.log('📦 createClient type:', typeof createClient);
 
 // Supabase Configuration - Already configured ✅
+// Same credentials as used in admin/.env.local
 const SUPABASE_URL = 'https://isndoxsyjbdzibhkrisj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlzbmRveHN5amJkemliaGtyaXNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1ODg4NTEsImV4cCI6MjA4MzE2NDg1MX0.xAhUBZ-5NCySy6QmF0DheBZaeFZRBBtnHRDHYcpQglo';
 
@@ -52,46 +49,42 @@ console.log('🔍 Validation check:', {
 if (hasValidUrl && hasValidKey) {
   console.log('✅ Validation passed, creating client...');
   
-  if (!createClient || typeof createClient !== 'function') {
-    console.error('❌ CRITICAL: createClient is not a function!');
-    console.error('❌ createClient value:', createClient);
-    console.error('❌ createClient type:', typeof createClient);
-  } else {
-    try {
-      console.log('🔧 Calling createClient with:', {
-        url: SUPABASE_URL,
-        keyLength: SUPABASE_ANON_KEY.length,
-        keyPreview: SUPABASE_ANON_KEY.substring(0, 20) + '...',
-        createClientType: typeof createClient,
-      });
+  try {
+    console.log('🔧 Creating Supabase client (matching backend pattern)...');
+    
+    // Use same pattern as backend: createClient with auth options
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
 
-      supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('🔧 createClient returned:', {
+      isNull: supabase === null,
+      isUndefined: supabase === undefined,
+      type: typeof supabase,
+      hasStorage: supabase ? !!supabase.storage : false,
+      hasAuth: supabase ? !!supabase.auth : false,
+    });
 
-      console.log('🔧 createClient returned:', {
-        isNull: supabase === null,
-        isUndefined: supabase === undefined,
-        type: typeof supabase,
-        hasStorage: supabase ? !!supabase.storage : false,
-      });
-
-      // Verify client was created
-      if (supabase) {
-        console.log('✅ Supabase client initialized successfully');
-        console.log('✅ Client type:', typeof supabase);
-        console.log('✅ Client has storage:', !!supabase.storage);
-        console.log('✅ Client has auth:', !!supabase.auth);
-      } else {
-        console.error('❌ Supabase client is null after createClient call');
-      }
-    } catch (error) {
-      console.error('❌ CRITICAL: Exception during createClient:', error);
-      console.error('Error details:', {
-        message: error?.message,
-        name: error?.name,
-        stack: error?.stack?.substring(0, 500),
-      });
-      supabase = null;
+    // Verify client was created
+    if (supabase) {
+      console.log('✅ Supabase client initialized successfully');
+      console.log('✅ Client type:', typeof supabase);
+      console.log('✅ Client has storage:', !!supabase.storage);
+      console.log('✅ Client has auth:', !!supabase.auth);
+    } else {
+      console.error('❌ Supabase client is null after createClient call');
     }
+  } catch (error) {
+    console.error('❌ CRITICAL: Exception during createClient:', error);
+    console.error('Error details:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack?.substring(0, 500),
+    });
+    supabase = null;
   }
 } else {
   console.error('❌ CRITICAL: Validation failed - credentials are invalid:', {
