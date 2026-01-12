@@ -148,6 +148,7 @@ export default function AddBookPage() {
         pdf_url: pdfUrl,
         cover_image_url: coverImageUrls[0] || null,
         cover_images: coverImageUrls,
+        status: 'published', // Admin uploads are automatically published
       };
 
       await apiClient.createBook(bookData);
