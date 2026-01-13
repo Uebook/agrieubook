@@ -302,11 +302,11 @@ const BookDetailScreen = ({ route, navigation }) => {
       }
       try {
         setCheckingPurchase(true);
-        
+
         // Check purchase status
         const response = await apiClient.getOrders(userId, { limit: 100 });
         const orders = response.orders || [];
-        
+
         // Check if this book is in any order
         const purchased = orders.some((order) => {
           if (order.books && Array.isArray(order.books)) {
@@ -314,7 +314,7 @@ const BookDetailScreen = ({ route, navigation }) => {
           }
           return false;
         });
-        
+
         setIsPurchased(purchased);
 
         // Check subscription status
@@ -386,180 +386,180 @@ const BookDetailScreen = ({ route, navigation }) => {
     <View style={styles.container}>
       <Header title="Book Details" navigation={navigation} />
       <ScrollView style={styles.scrollView}>
-      {/* Cover Images Carousel */}
-      <View style={styles.coverContainer}>
-        {coverImages.length > 1 ? (
-          <>
-            <FlatList
-              data={coverImages}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item, index) => index.toString()}
-              onMomentumScrollEnd={(event) => {
-                const index = Math.round(
-                  event.nativeEvent.contentOffset.x / screenWidth
-                );
-                setCurrentImageIndex(index);
-              }}
-              renderItem={({ item }) => (
-                <Image
-                  source={{ uri: item }}
-                  style={[styles.bookCover, { width: screenWidth - 40 }]}
-                  resizeMode="cover"
-                />
-              )}
+        {/* Cover Images Carousel */}
+        <View style={styles.coverContainer}>
+          {coverImages.length > 1 ? (
+            <>
+              <FlatList
+                data={coverImages}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item, index) => index.toString()}
+                onMomentumScrollEnd={(event) => {
+                  const index = Math.round(
+                    event.nativeEvent.contentOffset.x / screenWidth
+                  );
+                  setCurrentImageIndex(index);
+                }}
+                renderItem={({ item }) => (
+                  <Image
+                    source={{ uri: item }}
+                    style={[styles.bookCover, { width: screenWidth - 40 }]}
+                    resizeMode="cover"
+                  />
+                )}
+              />
+              <View style={styles.imageIndicators}>
+                {coverImages.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.indicator,
+                      index === currentImageIndex && styles.indicatorActive,
+                    ]}
+                  />
+                ))}
+              </View>
+            </>
+          ) : (
+            <Image
+              source={{ uri: coverImages[0] }}
+              style={styles.bookCover}
+              resizeMode="cover"
             />
-            <View style={styles.imageIndicators}>
-              {coverImages.map((_, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.indicator,
-                    index === currentImageIndex && styles.indicatorActive,
-                  ]}
-                />
-              ))}
+          )}
+          {/* Wishlist button - only for readers viewing other authors' books */}
+          {!isMyBook && userRole === 'reader' && (
+            <TouchableOpacity
+              style={styles.wishlistButton}
+              onPress={handleWishlistToggle}
+            >
+              <Text style={styles.wishlistIcon}>{isWishlisted ? '❤️' : '🤍'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Book Info */}
+        <View style={styles.content}>
+          <Text style={styles.title}>{book.title}</Text>
+          <Text style={styles.author}>By {authorName}</Text>
+
+          {/* Rating and Reviews - HIDDEN for readers (requirement: "no review and rating") */}
+          {/* Price - Only for authors viewing their own book */}
+          {isMyBook && (
+            <View style={styles.priceContainer}>
+              <Text style={styles.price}>
+                {book.is_free ? 'Free' : `₹${book.price || 0}`}
+              </Text>
+              {book.original_price && book.original_price > book.price && (
+                <Text style={styles.originalPrice}>₹{book.original_price}</Text>
+              )}
             </View>
-          </>
-        ) : (
-          <Image
-            source={{ uri: coverImages[0] }}
-            style={styles.bookCover}
-            resizeMode="cover"
-          />
-        )}
-        {/* Wishlist button - only for readers viewing other authors' books */}
-        {!isMyBook && userRole === 'reader' && (
-          <TouchableOpacity
-            style={styles.wishlistButton}
-            onPress={handleWishlistToggle}
-          >
-            <Text style={styles.wishlistIcon}>{isWishlisted ? '❤️' : '🤍'}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+          )}
 
-      {/* Book Info */}
-      <View style={styles.content}>
-        <Text style={styles.title}>{book.title}</Text>
-        <Text style={styles.author}>By {authorName}</Text>
-
-        {/* Rating and Reviews - HIDDEN for readers (requirement: "no review and rating") */}
-        {/* Price - Only for authors viewing their own book */}
-        {isMyBook && (
-          <View style={styles.priceContainer}>
-            <Text style={styles.price}>
-              {book.is_free ? 'Free' : `₹${book.price || 0}`}
-            </Text>
-            {book.original_price && book.original_price > book.price && (
-              <Text style={styles.originalPrice}>₹{book.original_price}</Text>
-            )}
+          {/* Book Details */}
+          <View style={styles.detailsContainer}>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Pages</Text>
+              <Text style={styles.detailValue}>{book.pages || 'N/A'}</Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Language</Text>
+              <Text style={styles.detailValue}>{book.language || 'English'}</Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>Category</Text>
+              <Text style={styles.detailValue}>{book.category?.name || 'Uncategorized'}</Text>
+            </View>
           </View>
-        )}
 
-        {/* Book Details */}
-        <View style={styles.detailsContainer}>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Pages</Text>
-            <Text style={styles.detailValue}>{book.pages || 'N/A'}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Language</Text>
-            <Text style={styles.detailValue}>{book.language || 'English'}</Text>
-          </View>
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Category</Text>
-            <Text style={styles.detailValue}>{book.category?.name || 'Uncategorized'}</Text>
-          </View>
-        </View>
-
-        {/* Summary */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Summary</Text>
-          <Text style={styles.summary}>{book.summary || 'No summary available.'}</Text>
-        </View>
-
-        {/* Author Info */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About the Author</Text>
-          <Text style={styles.authorInfo}>
-            {book.author?.bio || `${authorName} is an experienced agricultural expert.`}
-          </Text>
-        </View>
-
-        {/* Sample Reading - Only for readers viewing other authors' books */}
-        {!isMyBook && userRole === 'reader' && (
+          {/* Summary */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sample Reading</Text>
-            <Text style={styles.sampleText}>
-              {book.sampleText || 'Chapter 1: Introduction... [Sample content]'}
-            </Text>
-            <TouchableOpacity
-              style={styles.readSampleButton}
-              onPress={() => navigation.navigate('Reader', { bookId: book.id, sample: true })}
-            >
-              <Text style={styles.readSampleText}>Read Sample</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>Summary</Text>
+            <Text style={styles.summary}>{book.summary || 'No summary available.'}</Text>
           </View>
-        )}
 
-        {/* Action Buttons */}
-        {isMyBook ? (
-          // Author viewing their own book - Only Edit button
-          <View style={styles.actionContainer}>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => navigation.navigate('EditBook', { bookId: book.id })}
-            >
-              <Text style={styles.editButtonText}>✏️ Edit Book</Text>
-            </TouchableOpacity>
+          {/* Author Info */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>About the Author</Text>
+            <Text style={styles.authorInfo}>
+              {book.author?.bio || `${authorName} is an experienced agricultural expert.`}
+            </Text>
           </View>
-        ) : userRole === 'reader' ? (
-          // Reader viewing other authors' books
-          <View style={styles.actionContainer}>
-            {checkingPurchase ? (
-              <ActivityIndicator size="small" color={themeColors.primary.main} />
-            ) : isPurchased || book.is_free || hasActiveSubscription ? (
-              // Book is purchased, free, or user has active subscription - Show Read button
+
+          {/* Sample Reading - Only for readers viewing other authors' books */}
+          {!isMyBook && userRole === 'reader' && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sample Reading</Text>
+              <Text style={styles.sampleText}>
+                {book.sampleText || 'Chapter 1: Introduction... [Sample content]'}
+              </Text>
+              <TouchableOpacity
+                style={styles.readSampleButton}
+                onPress={() => navigation.navigate('Reader', { bookId: book.id, sample: true })}
+              >
+                <Text style={styles.readSampleText}>Read Sample</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Action Buttons */}
+          {isMyBook ? (
+            // Author viewing their own book - Only Edit button
+            <View style={styles.actionContainer}>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => navigation.navigate('EditBook', { bookId: book.id })}
+              >
+                <Text style={styles.editButtonText}>✏️ Edit Book</Text>
+              </TouchableOpacity>
+            </View>
+          ) : userRole === 'reader' ? (
+            // Reader viewing other authors' books
+            <View style={styles.actionContainer}>
+              {checkingPurchase ? (
+                <ActivityIndicator size="small" color={themeColors.primary.main} />
+              ) : isPurchased || book.is_free || hasActiveSubscription ? (
+                // Book is purchased, free, or user has active subscription - Show Read button
+                <TouchableOpacity
+                  style={styles.readButton}
+                  onPress={() => navigation.navigate('Reader', { bookId: book.id })}
+                >
+                  <Text style={styles.readButtonText}>
+                    {hasActiveSubscription && !isPurchased && !book.is_free ? 'Read (Subscription)' : 'Read'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                // Book is not purchased and no subscription - Show Buy Now button
+                <TouchableOpacity
+                  style={styles.buyButton}
+                  onPress={() => navigation.navigate('Payment', { bookId: book.id })}
+                >
+                  <Text style={styles.buyButtonText}>Buy Now</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            // Other cases (if any) - Buy and Read
+            <View style={styles.actionContainer}>
+              {!book.is_free && (
+                <TouchableOpacity
+                  style={styles.buyButton}
+                  onPress={() => navigation.navigate('Payment', { bookId: book.id })}
+                >
+                  <Text style={styles.buyButtonText}>Buy Now</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.readButton}
                 onPress={() => navigation.navigate('Reader', { bookId: book.id })}
               >
-                <Text style={styles.readButtonText}>
-                  {hasActiveSubscription && !isPurchased && !book.is_free ? 'Read (Subscription)' : 'Read'}
-                </Text>
+                <Text style={styles.readButtonText}>Start Reading</Text>
               </TouchableOpacity>
-            ) : (
-              // Book is not purchased and no subscription - Show Buy Now button
-              <TouchableOpacity
-                style={styles.buyButton}
-                onPress={() => navigation.navigate('Payment', { bookId: book.id })}
-              >
-                <Text style={styles.buyButtonText}>Buy Now</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          // Other cases (if any) - Buy and Read
-          <View style={styles.actionContainer}>
-            {!book.is_free && (
-              <TouchableOpacity
-                style={styles.buyButton}
-                onPress={() => navigation.navigate('Payment', { bookId: book.id })}
-              >
-                <Text style={styles.buyButtonText}>Buy Now</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.readButton}
-              onPress={() => navigation.navigate('Reader', { bookId: book.id })}
-            >
-              <Text style={styles.readButtonText}>Start Reading</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );

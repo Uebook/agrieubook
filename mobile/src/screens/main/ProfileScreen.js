@@ -143,6 +143,7 @@ const ProfileScreen = ({ navigation }) => {
   const navigateToYouTubeChannels = useCallback(() => navigation.navigate('YouTubeChannels'), [navigation]);
   const navigateToSettings = useCallback(() => navigation.navigate('Settings'), [navigation]);
   const navigateToEditProfile = useCallback(() => navigation.navigate('EditProfile'), [navigation]);
+  const navigateToSubscription = useCallback(() => navigation.navigate('Subscription'), [navigation]);
 
   // Memoize menuItems to prevent re-creation on every render
   // Filter menu items based on user role
@@ -175,6 +176,16 @@ const ProfileScreen = ({ navigation }) => {
       icon: '📦',
       onPress: navigateToOrderHistory,
     });
+    }
+    
+    // Only readers can subscribe
+    if (!isAuthor) {
+      items.push({
+        id: 'subscription',
+        title: 'Subscriptions',
+        icon: '💳',
+        onPress: navigateToSubscription,
+      });
     }
     
     // Only readers can use wishlist
@@ -214,7 +225,7 @@ const ProfileScreen = ({ navigation }) => {
     });
     
     return items;
-  }, [isAuthor, orderCount, userRole, user, navigateToBookUpload, navigateToOrderHistory, navigateToWishlist, navigateToReviews, navigateToYouTubeChannels, navigateToSettings]);
+  }, [isAuthor, orderCount, userRole, user, navigateToBookUpload, navigateToOrderHistory, navigateToSubscription, navigateToWishlist, navigateToReviews, navigateToYouTubeChannels, navigateToSettings]);
 
   // Memoize styles to prevent re-creation on every render
   const styles = useMemo(() => StyleSheet.create({

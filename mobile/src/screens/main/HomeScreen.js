@@ -36,6 +36,7 @@ const HomeScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [userRating, setUserRating] = useState(0);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
 
   // Ensure userData is safely accessed
   const safeUserData = userData || {};
@@ -92,6 +93,21 @@ const HomeScreen = ({ navigation }) => {
           console.warn('Error fetching user data:', err);
           // User data is not critical, continue without it
           setUserRating(0);
+        }
+
+        // Check subscription status (only for readers)
+        if (!isAuthor) {
+          try {
+            const subResponse = await apiClient.getUserSubscriptions(userId, 'active');
+            const activeSubs = subResponse.subscriptions || [];
+            const hasActive = activeSubs.some(
+              (sub) => sub.status === 'active' && (!sub.end_date || new Date(sub.end_date) > new Date())
+            );
+            setHasActiveSubscription(hasActive);
+          } catch (err) {
+            console.warn('Error checking subscription:', err);
+            setHasActiveSubscription(false);
+          }
         }
       }
     } catch (error) {
@@ -445,6 +461,41 @@ const HomeScreen = ({ navigation }) => {
       opacity: 0.9,
     },
     uploadQuickArrow: {
+      fontSize: 24,
+      color: themeColors.text.light,
+      marginLeft: 8,
+    },
+    subscriptionBanner: {
+      borderRadius: 12,
+      padding: 16,
+      marginHorizontal: 20,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: themeColors.primary.main,
+    },
+    subscriptionBannerContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    subscriptionBannerIcon: {
+      fontSize: 32,
+      marginRight: 12,
+    },
+    subscriptionBannerText: {
+      flex: 1,
+    },
+    subscriptionBannerTitle: {
+      fontSize: 16 * fontSizeMultiplier,
+      fontWeight: '600',
+      color: themeColors.text.light,
+      marginBottom: 4,
+    },
+    subscriptionBannerSubtitle: {
+      fontSize: 12 * fontSizeMultiplier,
+      color: themeColors.text.light,
+      opacity: 0.9,
+    },
+    subscriptionBannerArrow: {
       fontSize: 24,
       color: themeColors.text.light,
       marginLeft: 8,
