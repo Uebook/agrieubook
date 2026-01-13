@@ -356,6 +356,26 @@ const SubscriptionScreen = ({ navigation }) => {
       justifyContent: 'center',
       alignItems: 'center',
     },
+    infoBox: {
+      backgroundColor: themeColors.background.secondary,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: themeColors.border?.light || '#E0E0E0',
+    },
+    infoTitle: {
+      fontSize: 14 * fontSizeMultiplier,
+      fontWeight: 'bold',
+      color: themeColors.text.primary,
+      marginTop: 12,
+      marginBottom: 8,
+    },
+    infoText: {
+      fontSize: 13 * fontSizeMultiplier,
+      color: themeColors.text.secondary,
+      lineHeight: 20 * fontSizeMultiplier,
+    },
   });
 
   if (loading) {
@@ -380,6 +400,21 @@ const SubscriptionScreen = ({ navigation }) => {
         <Text style={styles.subtitle}>
           Select a subscription plan that works best for you
         </Text>
+
+        {/* Subscription Benefits Info */}
+        <View style={styles.infoBox}>
+          <Text style={styles.infoTitle}>📚 What's Included:</Text>
+          <Text style={styles.infoText}>
+            • Access to the app{'\n'}
+            • Free books and platform content{'\n'}
+            • Unlimited reading of free content
+          </Text>
+          <Text style={styles.infoTitle}>💡 Important:</Text>
+          <Text style={styles.infoText}>
+            • Paid author books still need to be purchased separately{'\n'}
+            • Subscription does not include paid books
+          </Text>
+        </View>
 
         {hasActiveSubscription && (
           <View style={styles.activeBadge}>
@@ -431,6 +466,16 @@ const SubscriptionScreen = ({ navigation }) => {
               {subscription.description && (
                 <Text style={styles.subscriptionDescription}>
                   {subscription.description}
+                </Text>
+              )}
+
+              {subscription.description ? (
+                <Text style={styles.subscriptionDescription}>
+                  {subscription.description}
+                </Text>
+              ) : (
+                <Text style={styles.subscriptionDescription}>
+                  Access to the app and all free books and platform content. Paid author books require separate purchase.
                 </Text>
               )}
 

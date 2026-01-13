@@ -50,13 +50,16 @@ export async function GET(request: NextRequest) {
     // Get payments and revenue from payments table
     let totalPayments = 0;
     let totalRevenue = 0;
+    let totalPlatformCommission = 0;
+    let totalGST = 0;
+    let totalAuthorEarnings = 0;
     const authorRevenue: any[] = [];
     
     try {
       // Check if payments table exists by trying to query it
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
-        .select('amount, status, book_id, audio_book_id, created_at')
+        .select('amount, status, book_id, audio_book_id, created_at, platform_commission, gst_amount, author_earnings')
         .limit(1);
       
       // If table doesn't exist (PGRST116) or no error, try to fetch all payments
@@ -67,13 +70,22 @@ export async function GET(request: NextRequest) {
         // Table exists, fetch all payments
         const { data: allPayments } = await supabase
           .from('payments')
-          .select('amount, status, book_id, audio_book_id, created_at');
+          .select('amount, status, book_id, audio_book_id, created_at, platform_commission, gst_amount, author_earnings, subscription_type_id');
         
         if (allPayments && allPayments.length > 0) {
-          totalPayments = allPayments.length;
-          // Calculate total revenue from successful payments
-          const successfulPayments = allPayments.filter(p => p.status === 'completed' || p.status === 'success');
-          totalRevenue = successfulPayments.reduce((sum, p) => sum + (parseFloat(String(p.amount)) || 0), 0);
+          // Filter out subscription payments - only count book/audio book purchases
+          const bookPayments = allPayments.filter(p => 
+            (p.status === 'completed' || p.status === 'success') && 
+            !p.subscription_type_id && 
+            (p.book_id || p.audio_book_id)
+          );
+          
+          totalPayments = bookPayments.length;
+          // Calculate totals
+          totalRevenue = bookPayments.reduce((sum, p) => sum + (parseFloat(String(p.amount)) || 0), 0);
+          totalPlatformCommission = bookPayments.reduce((sum, p) => sum + (parseFloat(String(p.platform_commission)) || 0), 0);
+          totalGST = bookPayments.reduce((sum, p) => sum + (parseFloat(String(p.gst_amount)) || 0), 0);
+          totalAuthorEarnings = bookPayments.reduce((sum, p) => sum + (parseFloat(String(p.author_earnings)) || 0), 0);
           
           // Calculate author revenue (group by author) - batch queries for efficiency
           const authorRevenueMap = new Map();
@@ -147,6 +159,12 @@ export async function GET(request: NextRequest) {
       // Continue with default values
     }
 
+    // Calculate platform profit (commission - GST is already deducted from gross)
+    const platformProfit = totalPlatformCommission;
+
+    // Calculate platform profit (commission - GST is already deducted from gross)
+    const platformProfit = totalPlatformCommission;
+
     return NextResponse.json({
       totalBooks: totalBooks || 0,
       totalAudioBooks: totalAudioBooks || 0,
@@ -154,6 +172,10 @@ export async function GET(request: NextRequest) {
       totalUsers: totalUsers || 0,
       totalRevenue,
       totalPayments,
+      totalPlatformCommission,
+      totalGST,
+      totalAuthorEarnings,
+      platformProfit,
       pendingBooks: pendingBooks || 0,
       pendingAudioBooks: pendingAudioBooks || 0,
       activeUsers: activeUsers || 0,

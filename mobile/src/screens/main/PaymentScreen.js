@@ -75,6 +75,12 @@ const PaymentScreen = ({ route, navigation }) => {
   const item = book || audioBook;
   const itemPrice = item?.price || 0;
   const isFree = item?.is_free || itemPrice === 0;
+  
+  // Determine book type based on new architecture:
+  // - Paid Author Book: author_id exists AND is_free = false AND price > 0
+  // - Free/Platform Content: is_free = true OR author_id is null
+  const isPaidAuthorBook = item?.author_id && !isFree && itemPrice > 0;
+  const isFreeOrPlatformContent = isFree || !item?.author_id;
 
   const handlePayment = async () => {
     if (!userId) {
@@ -82,11 +88,26 @@ const PaymentScreen = ({ route, navigation }) => {
       return;
     }
 
-    // Check if user has active subscription - if yes, allow free access
-    if (hasActiveSubscription && !isFree) {
+    // NEW ARCHITECTURE: Free/Platform Content requires subscription only
+    if (isFreeOrPlatformContent) {
+      if (!hasActiveSubscription) {
+        Alert.alert(
+          'Subscription Required',
+          'This content is only available with an active subscription. Please subscribe to access.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Subscribe', 
+              onPress: () => navigation.navigate('Subscription')
+            }
+          ]
+        );
+        return;
+      }
+      
+      // User has subscription - grant access
       try {
         setProcessing(true);
-        // Add book to library without payment (subscription benefit)
         await apiClient.purchaseBook(
           userId,
           bookId,
@@ -97,41 +118,22 @@ const PaymentScreen = ({ route, navigation }) => {
         );
         Alert.alert(
           'Success! 🎉',
-          'Book added to your library with your active subscription!',
+          'Content added to your library with your active subscription!',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       } catch (error) {
-        console.error('Error adding book with subscription:', error);
-        Alert.alert('Error', 'Failed to add book. Please try again.');
+        console.error('Error adding content with subscription:', error);
+        Alert.alert('Error', 'Failed to add content. Please try again.');
       } finally {
         setProcessing(false);
       }
       return;
     }
 
-    if (isFree) {
-      // Handle free book purchase
-      try {
-        setProcessing(true);
-        await apiClient.verifyRazorpayPayment(
-          'free',
-          'free',
-          'free',
-          userId,
-          bookId,
-          audioBookId,
-          0
-        );
-        Alert.alert('Success', 'Book added to your library!', [
-          { text: 'OK', onPress: () => navigation.goBack() },
-        ]);
-      } catch (error) {
-        console.error('Error processing free book:', error);
-        Alert.alert('Error', 'Failed to add book to library');
-      } finally {
-        setProcessing(false);
-      }
-      return;
+    // NEW ARCHITECTURE: Paid Author Books require direct purchase only (no subscription access)
+    if (isPaidAuthorBook) {
+      // Proceed with direct payment - subscription check removed
+      // Continue to payment flow below
     }
 
     try {
@@ -513,7 +515,7 @@ const PaymentScreen = ({ route, navigation }) => {
           <View style={styles.priceContainer}>
             <Text style={styles.priceLabel}>Total Amount</Text>
             <Text style={styles.price}>
-              {isFree ? 'Free' : `₹${itemPrice}`}
+              {isFreeOrPlatformContent ? 'Subscription Required' : `₹${itemPrice}`}
             </Text>
           </View>
         </View>
@@ -527,14 +529,18 @@ const PaymentScreen = ({ route, navigation }) => {
             <ActivityIndicator color={themeColors.text.light || '#FFFFFF'} />
           ) : (
             <Text style={styles.payButtonText}>
-              {isFree ? 'Get Free' : 'Pay Now'}
+              {isFreeOrPlatformContent 
+                ? (hasActiveSubscription ? 'Access with Subscription' : 'Subscribe to Access')
+                : 'Pay Now'}
             </Text>
           )}
         </TouchableOpacity>
 
         <Text style={styles.infoText}>
-          {isFree
-            ? 'This item is free. Click "Get Free" to add it to your library.'
+          {isFreeOrPlatformContent
+            ? 'This content requires an active subscription to access.'
+            : isPaidAuthorBook
+            ? 'Secure payment powered by Razorpay. Your payment information is encrypted and secure.'
             : 'Secure payment powered by Razorpay. Your payment information is encrypted and secure.'}
         </Text>
       </ScrollView>

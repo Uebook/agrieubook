@@ -166,6 +166,12 @@ const ProfileScreen = ({ navigation }) => {
         icon: '📤',
         onPress: navigateToBookUpload,
       });
+      items.push({
+        id: 'wallet',
+        title: 'My Wallet',
+        icon: '💰',
+        onPress: () => navigation.navigate('Wallet'),
+      });
     }
     
     // Only readers can see orders (authors don't have orders)

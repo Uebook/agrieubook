@@ -35,22 +35,34 @@ class ApiClient {
     console.log('API Request (axios):', { url, method, baseUrl: this.baseUrl });
 
     try {
+      // Determine Content-Type based on request
+      const isFormData = options.body instanceof FormData;
+      const contentType = isFormData 
+        ? 'multipart/form-data' 
+        : (options.body ? 'application/json' : undefined);
+
       const config = {
         method,
         url,
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': '*/*',
-          ...options.headers,
+          Accept: 'application/json',
         },
         timeout: 30000, // 30 second timeout
       };
 
-      // Add body for POST/PUT/PATCH requests
-      if (options.body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-        config.data = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+      // Set Content-Type only if not FormData (axios sets it automatically for FormData)
+      if (contentType && !isFormData) {
+        config.headers['Content-Type'] = contentType;
       }
 
+      // Add body for POST/PUT/PATCH requests
+      if (options.body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+        if (isFormData) {
+          config.data = options.body;
+        } else {
+          config.data = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+        }
+      }
       const response = await axios(config);
       return response.data;
     } catch (error) {
@@ -854,6 +866,26 @@ class ApiClient {
     return this.request('/api/reviews', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  // Wallet API (for authors)
+  async getWallet(authorId) {
+    return this.request(`/api/wallet?author_id=${authorId}`);
+  }
+
+  async getWalletHistory(authorId, type = 'payments', page = 1, limit = 20) {
+    return this.request(`/api/wallet/history?author_id=${authorId}&type=${type}&page=${page}&limit=${limit}`);
+  }
+
+  async requestWithdrawal(authorId, amount, paymentDetails) {
+    return this.request(`/api/wallet/withdraw`, {
+      method: 'POST',
+      body: JSON.stringify({
+        author_id: authorId,
+        amount,
+        ...paymentDetails,
+      }),
     });
   }
 }

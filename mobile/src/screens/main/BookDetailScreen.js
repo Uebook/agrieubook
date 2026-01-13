@@ -303,31 +303,37 @@ const BookDetailScreen = ({ route, navigation }) => {
       try {
         setCheckingPurchase(true);
 
-        // Check purchase status
-        const response = await apiClient.getOrders(userId, { limit: 100 });
-        const orders = response.orders || [];
+        // Determine book type
+        const isPaidAuthorBook = book?.author_id && !book.is_free && (book.price || 0) > 0;
+        const isFreeOrPlatformContent = book?.is_free || !book?.author_id;
 
-        // Check if this book is in any order
-        const purchased = orders.some((order) => {
-          if (order.books && Array.isArray(order.books)) {
-            return order.books.some((b) => b.id === bookId);
+        // For paid author books, check purchase status
+        if (isPaidAuthorBook) {
+          const response = await apiClient.getOrders(userId, { limit: 100 });
+          const orders = response.orders || [];
+          const purchased = orders.some((order) => {
+            if (order.books && Array.isArray(order.books)) {
+              return order.books.some((b) => b.id === bookId);
+            }
+            return false;
+          });
+          setIsPurchased(purchased);
+          setHasActiveSubscription(false); // Subscription doesn't apply to paid author books
+        } 
+        // For free/platform content, check subscription status
+        else if (isFreeOrPlatformContent) {
+          setIsPurchased(false); // No direct purchase for free/platform content
+          try {
+            const subResponse = await apiClient.getUserSubscriptions(userId, 'active');
+            const activeSubs = subResponse.subscriptions || [];
+            const hasActive = activeSubs.some(
+              (sub) => sub.status === 'active' && (!sub.end_date || new Date(sub.end_date) > new Date())
+            );
+            setHasActiveSubscription(hasActive);
+          } catch (subError) {
+            console.error('Error checking subscription:', subError);
+            setHasActiveSubscription(false);
           }
-          return false;
-        });
-
-        setIsPurchased(purchased);
-
-        // Check subscription status
-        try {
-          const subResponse = await apiClient.getUserSubscriptions(userId, 'active');
-          const activeSubs = subResponse.subscriptions || [];
-          const hasActive = activeSubs.some(
-            (sub) => sub.status === 'active' && (!sub.end_date || new Date(sub.end_date) > new Date())
-          );
-          setHasActiveSubscription(hasActive);
-        } catch (subError) {
-          console.error('Error checking subscription:', subError);
-          setHasActiveSubscription(false);
         }
       } catch (error) {
         console.error('Error checking purchase:', error);
@@ -338,7 +344,7 @@ const BookDetailScreen = ({ route, navigation }) => {
       }
     };
     checkPurchase();
-  }, [userId, bookId, isMyBook, userRole]);
+  }, [userId, bookId, isMyBook, userRole, book]);
 
   // Fetch book from API
   useEffect(() => {
@@ -520,25 +526,59 @@ const BookDetailScreen = ({ route, navigation }) => {
             <View style={styles.actionContainer}>
               {checkingPurchase ? (
                 <ActivityIndicator size="small" color={themeColors.primary.main} />
-              ) : isPurchased || book.is_free || hasActiveSubscription ? (
-                // Book is purchased, free, or user has active subscription - Show Read button
-                <TouchableOpacity
-                  style={styles.readButton}
-                  onPress={() => navigation.navigate('Reader', { bookId: book.id })}
-                >
-                  <Text style={styles.readButtonText}>
-                    {hasActiveSubscription && !isPurchased && !book.is_free ? 'Read (Subscription)' : 'Read'}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                // Book is not purchased and no subscription - Show Buy Now button
-                <TouchableOpacity
-                  style={styles.buyButton}
-                  onPress={() => navigation.navigate('Payment', { bookId: book.id })}
-                >
-                  <Text style={styles.buyButtonText}>Buy Now</Text>
-                </TouchableOpacity>
-              )}
+              ) : (() => {
+                // Determine book type based on new architecture
+                const isPaidAuthorBook = book?.author_id && !book.is_free && (book.price || 0) > 0;
+                const isFreeOrPlatformContent = book?.is_free || !book?.author_id;
+
+                // Paid Author Book: Direct purchase only
+                if (isPaidAuthorBook) {
+                  return isPurchased ? (
+                    <TouchableOpacity
+                      style={styles.readButton}
+                      onPress={() => navigation.navigate('Reader', { bookId: book.id })}
+                    >
+                      <Text style={styles.readButtonText}>Read</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.buyButton}
+                      onPress={() => navigation.navigate('Payment', { bookId: book.id })}
+                    >
+                      <Text style={styles.buyButtonText}>Buy Now</Text>
+                    </TouchableOpacity>
+                  );
+                }
+                
+                // Free/Platform Content: Subscription only
+                if (isFreeOrPlatformContent) {
+                  return hasActiveSubscription ? (
+                    <TouchableOpacity
+                      style={styles.readButton}
+                      onPress={() => navigation.navigate('Reader', { bookId: book.id })}
+                    >
+                      <Text style={styles.readButtonText}>Read (Subscription)</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.buyButton}
+                      onPress={() => navigation.navigate('Subscription')}
+                    >
+                      <Text style={styles.buyButtonText}>Subscribe to Access</Text>
+                    </TouchableOpacity>
+                  );
+                }
+                
+                // Fallback
+                return (
+                  <TouchableOpacity
+                    style={styles.buyButton}
+                    onPress={() => navigation.navigate('Payment', { bookId: book.id })}
+                  >
+                    <Text style={styles.buyButtonText}>Buy Now</Text>
+                  </TouchableOpacity>
+                );
+              })()}
             </View>
           ) : (
             // Other cases (if any) - Buy and Read

@@ -43,7 +43,7 @@ const LibraryScreen = ({ navigation }) => {
           });
           setMyBooks(response.books || []);
         } else if (userId) {
-          // For readers, fetch purchased books from orders API
+          // For readers, fetch purchased books and subscription-accessible content
           console.log('📚 Fetching library for user:', {
             userId,
             userRole,
@@ -52,6 +52,7 @@ const LibraryScreen = ({ navigation }) => {
           });
 
           try {
+            // Fetch purchased books from orders
             const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
             console.log('📦 Orders API response:', {
               hasOrders: !!ordersResponse.orders,
@@ -62,9 +63,21 @@ const LibraryScreen = ({ navigation }) => {
 
             const orders = ordersResponse.orders || [];
 
-            // Extract unique books from orders
+            // Extract unique books from orders (paid author books)
             const purchasedBooks = [];
             const bookIds = new Set();
+            
+            // Check subscription status for free/platform content
+            let hasActiveSubscription = false;
+            try {
+              const subResponse = await apiClient.getUserSubscriptions(userId, 'active');
+              const activeSubs = subResponse.subscriptions || [];
+              hasActiveSubscription = activeSubs.some(
+                (sub) => sub.status === 'active' && (!sub.end_date || new Date(sub.end_date) > new Date())
+              );
+            } catch (subError) {
+              console.error('Error checking subscription:', subError);
+            }
 
             if (orders.length === 0) {
               console.log('⚠️ No orders found for user:', userId);

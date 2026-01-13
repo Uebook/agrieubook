@@ -91,17 +91,9 @@ These practices have revolutionized the agricultural industry, making it more ef
           return;
         }
 
-        // Check if book is free
-        if (bookData.is_free) {
-          // Free book - fetch PDF
-          const downloadResponse = await apiClient.getBookDownloadUrl(bookId);
-          if (downloadResponse.downloadUrl) {
-            setPdfUrl(downloadResponse.downloadUrl);
-            setIsPurchased(true);
-          }
-          setLoadingPdf(false);
-          return;
-        }
+        // Determine book type based on new architecture
+        const isPaidAuthorBook = bookData.author_id && !bookData.is_free && (bookData.price || 0) > 0;
+        const isFreeOrPlatformContent = bookData.is_free || !bookData.author_id;
 
         // Check if user is logged in
         if (!userId || userRole !== 'reader') {
@@ -109,29 +101,82 @@ These practices have revolutionized the agricultural industry, making it more ef
           return;
         }
 
-        // Check if book is purchased
-        const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
-        const orders = ordersResponse.orders || [];
+        // NEW ARCHITECTURE: Free/Platform Content requires subscription
+        if (isFreeOrPlatformContent) {
+          try {
+            // Check subscription status
+            const subResponse = await apiClient.getUserSubscriptions(userId, 'active');
+            const activeSubs = subResponse.subscriptions || [];
+            const hasActiveSubscription = activeSubs.some(
+              (sub) => sub.status === 'active' && (!sub.end_date || new Date(sub.end_date) > new Date())
+            );
 
-        const purchased = orders.some((order) => {
-          if (order.books && Array.isArray(order.books)) {
-            return order.books.some((b) => b.id === bookId);
+            if (hasActiveSubscription) {
+              // User has subscription - grant access
+              const downloadResponse = await apiClient.getBookDownloadUrl(bookId);
+              if (downloadResponse.downloadUrl) {
+                setPdfUrl(downloadResponse.downloadUrl);
+                setIsPurchased(true);
+              } else {
+                Alert.alert('Error', 'Failed to load PDF. Please try again.');
+              }
+            } else {
+              // No subscription - show subscription required message
+              Alert.alert(
+                'Subscription Required',
+                'This content requires an active subscription to access. Please subscribe to continue reading.',
+                [
+                  { text: 'Cancel', onPress: () => navigation.goBack() },
+                  { text: 'Subscribe', onPress: () => navigation.navigate('Subscription') }
+                ]
+              );
+              setIsPurchased(false);
+            }
+          } catch (subError) {
+            console.error('Error checking subscription:', subError);
+            Alert.alert('Error', 'Failed to verify subscription. Please try again.');
+            setIsPurchased(false);
           }
-          return false;
-        });
+          setLoadingPdf(false);
+          return;
+        }
 
-        if (purchased) {
-          // Book is purchased - fetch actual PDF
-          const downloadResponse = await apiClient.getBookDownloadUrl(bookId);
-          if (downloadResponse.downloadUrl) {
-            setPdfUrl(downloadResponse.downloadUrl);
-            setIsPurchased(true);
+        // NEW ARCHITECTURE: Paid Author Books require direct purchase (no subscription access)
+        if (isPaidAuthorBook) {
+          // Check if book is purchased
+          const ordersResponse = await apiClient.getOrders(userId, { limit: 100 });
+          const orders = ordersResponse.orders || [];
+
+          const purchased = orders.some((order) => {
+            if (order.books && Array.isArray(order.books)) {
+              return order.books.some((b) => b.id === bookId);
+            }
+            return false;
+          });
+
+          if (purchased) {
+            // Book is purchased - fetch actual PDF
+            const downloadResponse = await apiClient.getBookDownloadUrl(bookId);
+            if (downloadResponse.downloadUrl) {
+              setPdfUrl(downloadResponse.downloadUrl);
+              setIsPurchased(true);
+            } else {
+              Alert.alert('Error', 'Failed to load PDF. Please try again.');
+            }
           } else {
-            Alert.alert('Error', 'Failed to load PDF. Please try again.');
+            // Book not purchased - show purchase required message
+            Alert.alert(
+              'Purchase Required',
+              'This book requires purchase to access. Please purchase the book to continue reading.',
+              [
+                { text: 'Cancel', onPress: () => navigation.goBack() },
+                { text: 'Buy Now', onPress: () => navigation.navigate('Payment', { bookId }) }
+              ]
+            );
+            setIsPurchased(false);
           }
-        } else {
-          // Book not purchased - show sample
-          setIsPurchased(false);
+          setLoadingPdf(false);
+          return;
         }
       } catch (error) {
         console.error('Error fetching book/PDF:', error);

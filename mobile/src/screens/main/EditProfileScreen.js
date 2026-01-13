@@ -15,6 +15,8 @@ import ImagePicker from 'react-native-image-crop-picker';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
 
+const API_BASE_URL = 'https://admin-orcin-omega.vercel.app';
+
 const EditProfileScreen = ({ navigation, route }) => {
   // Get user from auth context or route params
   const { userData: authUser } = useAuth();
@@ -62,91 +64,47 @@ const EditProfileScreen = ({ navigation, route }) => {
   };
 
   const updateProfile = async () => {
-    if (!form.name.trim()) {
-      Alert.alert('Validation', 'Name is required');
-      return;
-    }
-
-    if (!user?.id) {
-      Alert.alert('Error', 'User ID not found. Please login again.');
-      return;
-    }
-
-    setLoading(true);
-    setUploading(true);
-
     try {
-      // Create FormData for file upload
       const formData = new FormData();
 
       formData.append('user_id', user.id);
-      formData.append('full_name', form.name);
-      formData.append('email', form.email || '');
-      formData.append('phone', form.mobile || '');
-      formData.append('bio', form.bio || '');
+      formData.append('name', form.name);
 
-      // Add profile picture if selected
       if (avatarFile?.path) {
+        const uri =
+          Platform.OS === 'android'
+            ? `file://${avatarFile.path}`
+            : avatarFile.path;
+
         formData.append('profile_picture', {
-          uri: avatarFile.path,
-          type: avatarFile.mime || 'image/jpeg',
-          name: avatarFile.name || `avatar_${Date.now()}.jpg`,
+          uri,
+          name: 'photo.jpg',
+          type: 'image/jpeg',
         });
       }
 
-      console.log('📤 Uploading profile with image to API...');
-
-      const response = await axios.post(
+      const res = await axios.post(
         'https://admin-orcin-omega.vercel.app/api/profile/update',
         formData,
         {
           headers: {
-            'Accept': '*/*',
-            // Do NOT set Content-Type - axios will set it automatically with boundary for FormData
+            Accept: 'application/json',
           },
-          timeout: 90000, // 90 seconds for file uploads
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
         }
       );
 
-      console.log('✅ Profile update response:', response.data);
-
-      if (!response?.data) {
-        throw new Error('No response from server');
-      }
-
-      if (!response.data.success) {
-        throw new Error(response.data.message || response.data.error || 'Update failed');
-      }
-
-      console.log('✅ Profile updated successfully');
-
-      Alert.alert('Success', 'Profile updated successfully', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-
+      console.log('SUCCESS:', res.data);
     } catch (err) {
-      console.error('❌ Profile update error:', err);
-
-      let errorMessage = 'Profile update failed';
-      
-      if (err?.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err?.response?.data?.error) {
-        errorMessage = err.response.data.error;
-      } else if (err?.message) {
-        errorMessage = err.message;
-      } else if (err?.request) {
-        errorMessage = 'No response from server. Please check your internet connection.';
-      }
-
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setLoading(false);
-      setUploading(false);
+      console.log('NETWORK ERROR FULL:', {
+        message: err.message,
+        isAxios: err.isAxiosError,
+        code: err.code,
+        response: err.response,
+        request: err.request,
+      });
     }
   };
+
 
 
   return (

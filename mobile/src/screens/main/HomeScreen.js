@@ -939,9 +939,9 @@ const HomeScreen = ({ navigation }) => {
             <View style={styles.subscriptionBannerContent}>
               <Text style={styles.subscriptionBannerIcon}>💳</Text>
               <View style={styles.subscriptionBannerText}>
-                <Text style={styles.subscriptionBannerTitle}>Unlock Unlimited Access</Text>
+                <Text style={styles.subscriptionBannerTitle}>Unlock App Access</Text>
                 <Text style={styles.subscriptionBannerSubtitle}>
-                  Subscribe now and read all books for free!
+                  Subscribe to access the app and free platform content!
                 </Text>
               </View>
               <Text style={styles.subscriptionBannerArrow}>→</Text>
