@@ -42,6 +42,7 @@ async function handleProfileUpdate(request: NextRequest) {
       url: request.url,
       isMultipart: contentType.includes('multipart') || contentType.includes('form-data'),
       isJSON: contentType.includes('application/json'),
+      allHeaders: Object.fromEntries(request.headers.entries()),
     });
     
     // Support both FormData (with file) and JSON (without file)
@@ -63,7 +64,25 @@ async function handleProfileUpdate(request: NextRequest) {
     
     if (isFormData) {
       // Parse FormData (with file upload)
-      const formData = await request.formData();
+      let formData: FormData;
+      try {
+        formData = await request.formData();
+        console.log('✅ FormData parsed successfully');
+      } catch (formDataError: any) {
+        console.error('❌ Error parsing FormData:', formDataError);
+        const errorResponse = NextResponse.json(
+          {
+            success: false,
+            error: 'Failed to parse FormData',
+            details: formDataError.message || 'Unknown error parsing form data',
+          },
+          { status: 400 }
+        );
+        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+          errorResponse.headers.set(key, value);
+        });
+        return errorResponse;
+      }
       
       userId = formData.get('user_id') as string | null;
       authorId = formData.get('author_id') as string | null;
@@ -76,7 +95,30 @@ async function handleProfileUpdate(request: NextRequest) {
       state = formData.get('state') as string | null;
       pincode = formData.get('pincode') as string | null;
       website = formData.get('website') as string | null;
-      profilePicture = formData.get('profile_picture') as File | null;
+      
+      const profilePictureEntry = formData.get('profile_picture');
+      console.log('📸 Profile picture entry:', {
+        type: typeof profilePictureEntry,
+        isFile: profilePictureEntry instanceof File,
+        isBlob: profilePictureEntry instanceof Blob,
+        hasName: profilePictureEntry && typeof (profilePictureEntry as any).name !== 'undefined',
+        hasType: profilePictureEntry && typeof (profilePictureEntry as any).type !== 'undefined',
+      });
+      
+      // Handle both File objects and React Native FormData format
+      if (profilePictureEntry instanceof File) {
+        profilePicture = profilePictureEntry;
+      } else if (profilePictureEntry && typeof profilePictureEntry === 'object') {
+        // React Native might send it as a Blob or similar
+        // Convert to File if possible
+        const entry = profilePictureEntry as any;
+        if (entry instanceof Blob) {
+          profilePicture = new File([entry], entry.name || `profile_${Date.now()}.jpg`, { type: entry.type || 'image/jpeg' });
+        } else {
+          // If it's not a File or Blob, try to get it as File
+          profilePicture = profilePictureEntry as File;
+        }
+      }
     } else {
       // Parse JSON body (without file)
       let body: any;
@@ -160,21 +202,66 @@ async function handleProfileUpdate(request: NextRequest) {
     const supabase = createServerClient();
     
     // Handle profile picture upload if provided (FormData)
-    if (profilePicture && profilePicture instanceof File) {
+    // React Native FormData might send as Blob or File-like object
+    if (profilePicture) {
       console.log('📤 Uploading profile picture to Supabase...');
+      console.log('📸 Profile picture details:', {
+        isFile: profilePicture instanceof File,
+        isBlob: profilePicture instanceof Blob,
+        hasName: !!(profilePicture as any).name,
+        hasType: !!(profilePicture as any).type,
+        hasSize: !!(profilePicture as any).size,
+      });
       
       try {
-        // Read file as Buffer
-        const arrayBuffer = await profilePicture.arrayBuffer();
-        const fileBuffer = Buffer.from(arrayBuffer);
-        const fileName = profilePicture.name || `profile_${Date.now()}.jpg`;
-        const contentType = profilePicture.type || 'image/jpeg';
+        let fileBuffer: Buffer;
+        let fileName: string;
+        let contentType: string;
+        
+        if (profilePicture instanceof File) {
+          // Standard File object
+          const arrayBuffer = await profilePicture.arrayBuffer();
+          fileBuffer = Buffer.from(arrayBuffer);
+          fileName = profilePicture.name || `profile_${Date.now()}.jpg`;
+          contentType = profilePicture.type || 'image/jpeg';
+        } else if (profilePicture instanceof Blob) {
+          // Blob object (might come from React Native)
+          const arrayBuffer = await profilePicture.arrayBuffer();
+          fileBuffer = Buffer.from(arrayBuffer);
+          fileName = (profilePicture as any).name || `profile_${Date.now()}.jpg`;
+          contentType = profilePicture.type || 'image/jpeg';
+        } else {
+          // Try to read as stream or arrayBuffer
+          const entry = profilePicture as any;
+          if (entry.arrayBuffer) {
+            const arrayBuffer = await entry.arrayBuffer();
+            fileBuffer = Buffer.from(arrayBuffer);
+          } else if (entry.stream) {
+            const chunks: Uint8Array[] = [];
+            const reader = entry.stream().getReader();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+            }
+            fileBuffer = Buffer.concat(chunks);
+          } else {
+            throw new Error('Unable to read profile picture file');
+          }
+          fileName = entry.name || `profile_${Date.now()}.jpg`;
+          contentType = entry.type || 'image/jpeg';
+        }
         
         // Generate unique file name
         const timestamp = Date.now();
-        const uniqueFileName = `${targetUserId}/${timestamp}-${fileName}`;
+        // Sanitize fileName to remove any path separators
+        const sanitizedFileName = fileName.replace(/[\/\\]/g, '_');
+        const uniqueFileName = `${targetUserId}/${timestamp}-${sanitizedFileName}`;
         
-        console.log('📤 Uploading to bucket "avatars" with path:', uniqueFileName);
+        console.log('📤 Uploading to bucket "avatars" with path:', uniqueFileName, {
+          fileSize: fileBuffer.length,
+          contentType,
+        });
         
         // Upload to Supabase Storage
         const { data: uploadData, error: uploadError } = await supabase.storage

@@ -11,11 +11,9 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import axios from 'axios';
 import ImagePicker from 'react-native-image-crop-picker';
 import { useAuth } from '../../context/AuthContext';
-
-const API_BASE_URL = 'https://admin-orcin-omega.vercel.app';
+import apiClient from '../../services/api';
 
 const EditProfileScreen = ({ navigation, route }) => {
   // Get user from auth context or route params
@@ -46,7 +44,8 @@ const EditProfileScreen = ({ navigation, route }) => {
         : await ImagePicker.openPicker({ width: 1200, height: 1200, cropping: true, compressImageQuality: 0.6, });
 
       setAvatarUri(img.path);
-      console.log(img.size);
+      const sizeInKB = (img.size / 1024).toFixed(2);
+      console.log(sizeInKB + " KB");
       setAvatarFile({
         path: img.path,
         mime: img.mime,
@@ -80,7 +79,7 @@ const EditProfileScreen = ({ navigation, route }) => {
     try {
       // Create FormData for file upload
       const formData = new FormData();
-      
+
       formData.append('user_id', user.id);
       formData.append('full_name', form.name);
       formData.append('email', form.email || '');
@@ -98,22 +97,10 @@ const EditProfileScreen = ({ navigation, route }) => {
 
       console.log('📤 Uploading profile with image to API...');
 
-      const res = await axios.post(
-        `${API_BASE_URL}/api/profile/update`,
-        formData,
-        {
-          headers: {
-            'Accept': '*/*',
-            // Do NOT set Content-Type - axios will set it automatically with boundary for FormData
-          },
-          timeout: 90000, // 90 seconds for file uploads
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-        }
-      );
+      const res = await apiClient.updateProfile(formData);
 
-      if (!res.data?.success) {
-        throw new Error(res.data?.message || res.data?.error || 'Update failed');
+      if (!res?.success) {
+        throw new Error(res?.message || res?.error || 'Update failed');
       }
 
       console.log('✅ Profile updated successfully');
