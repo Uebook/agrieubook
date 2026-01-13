@@ -1,0 +1,18 @@
+{
+  "name": "agribook-website",
+  "version": "1.0.0",
+  "description": "Agribook Marketing Website - Static site",
+  "scripts": {
+    "dev": "npx serve .",
+    "build": "echo 'Static site - no build needed'",
+    "start": "npx serve ."
+  },
+  "keywords": [
+    "agriculture",
+    "ebooks",
+    "marketing",
+    "static-site"
+  ],
+  "author": "Agribook",
+  "license": "MIT"
+}
