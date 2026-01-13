@@ -112,8 +112,10 @@ async function handleProfileUpdate(request: NextRequest) {
         // React Native might send it as a Blob or similar
         // Convert to File if possible
         const entry = profilePictureEntry as any;
-        if (entry instanceof Blob) {
-          profilePicture = new File([entry], entry.name || `profile_${Date.now()}.jpg`, { type: entry.type || 'image/jpeg' });
+        if (entry instanceof Blob || (entry.constructor && entry.constructor.name === 'Blob')) {
+          const blobName = (entry as any).name || `profile_${Date.now()}.jpg`;
+          const blobType = (entry as any).type || 'image/jpeg';
+          profilePicture = new File([entry], blobName, { type: blobType });
         } else {
           // If it's not a File or Blob, try to get it as File
           profilePicture = profilePictureEntry as File;
@@ -218,38 +220,30 @@ async function handleProfileUpdate(request: NextRequest) {
         let fileName: string;
         let contentType: string;
         
+        const profilePic = profilePicture as any;
         if (profilePicture instanceof File) {
           // Standard File object
           const arrayBuffer = await profilePicture.arrayBuffer();
           fileBuffer = Buffer.from(arrayBuffer);
           fileName = profilePicture.name || `profile_${Date.now()}.jpg`;
           contentType = profilePicture.type || 'image/jpeg';
-        } else if (profilePicture instanceof Blob) {
-          // Blob object (might come from React Native)
-          const arrayBuffer = await profilePicture.arrayBuffer();
-          fileBuffer = Buffer.from(arrayBuffer);
-          fileName = (profilePicture as any).name || `profile_${Date.now()}.jpg`;
-          contentType = profilePicture.type || 'image/jpeg';
         } else {
-          // Try to read as stream or arrayBuffer
-          const entry = profilePicture as any;
-          if (entry.arrayBuffer) {
-            const arrayBuffer = await entry.arrayBuffer();
-            fileBuffer = Buffer.from(arrayBuffer);
-          } else if (entry.stream) {
-            const chunks: Uint8Array[] = [];
-            const reader = entry.stream().getReader();
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              chunks.push(value);
-            }
-            fileBuffer = Buffer.concat(chunks);
+          // Handle Blob or other file-like objects
+          let arrayBuffer: ArrayBuffer;
+          if (profilePic && typeof profilePic.arrayBuffer === 'function') {
+            arrayBuffer = await profilePic.arrayBuffer();
           } else {
-            throw new Error('Unable to read profile picture file');
+            // Try to cast as Blob and get arrayBuffer
+            const blobLike = profilePicture as any;
+            if (blobLike && typeof blobLike.arrayBuffer === 'function') {
+              arrayBuffer = await blobLike.arrayBuffer();
+            } else {
+              throw new Error('Invalid file format');
+            }
           }
-          fileName = entry.name || `profile_${Date.now()}.jpg`;
-          contentType = entry.type || 'image/jpeg';
+          fileBuffer = Buffer.from(arrayBuffer);
+          fileName = profilePic.name || `profile_${Date.now()}.jpg`;
+          contentType = profilePic.type || 'image/jpeg';
         }
         
         // Generate unique file name
