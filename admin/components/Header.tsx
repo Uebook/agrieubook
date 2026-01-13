@@ -6,7 +6,21 @@ export default function Header() {
     const router = useRouter();
 
     const handleLogout = () => {
-        localStorage.removeItem('adminAuth');
+        try {
+            localStorage.removeItem('adminAuth');
+            localStorage.removeItem('adminUser');
+            localStorage.removeItem('adminToken');
+        } catch (error) {
+            console.warn('Failed to clear localStorage on logout:', error);
+        }
+
+        try {
+            document.cookie = 'adminAuth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            document.cookie = 'adminToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        } catch (error) {
+            console.warn('Failed to clear auth cookies:', error);
+        }
+
         router.push('/login');
     };
 

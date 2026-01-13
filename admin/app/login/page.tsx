@@ -18,14 +18,25 @@ export default function LoginPage() {
 
     try {
       const response = await apiClient.login(email, password);
-      
+
       if (response.success && response.user) {
-        // Store auth data
-        localStorage.setItem('adminAuth', 'true');
-        localStorage.setItem('adminUser', JSON.stringify(response.user));
-        localStorage.setItem('adminToken', response.token || response.user.id);
-        
-        // Redirect to dashboard
+        try {
+          // Store auth data
+          localStorage.setItem('adminAuth', 'true');
+          localStorage.setItem('adminUser', JSON.stringify(response.user));
+          localStorage.setItem('adminToken', response.token || response.user.id);
+        } catch (storageError) {
+          console.warn('Failed to access localStorage:', storageError);
+        }
+
+        try {
+          // Persist auth in cookies so middleware can guard routes
+          document.cookie = `adminAuth=true; path=/; max-age=${60 * 60 * 12}; SameSite=Lax`;
+          document.cookie = `adminToken=${response.token || response.user.id}; path=/; max-age=${60 * 60 * 12}; SameSite=Lax`;
+        } catch (cookieError) {
+          console.warn('Failed to set auth cookies:', cookieError);
+        }
+
         router.push('/dashboard');
       } else {
         setError('Invalid email or password');
@@ -105,10 +116,7 @@ export default function LoginPage() {
         <div className="mt-6 text-center text-sm text-gray-600">
           <p>Default Admin Credentials:</p>
           <p className="font-mono text-xs mt-1">Email: admin@agribook.com</p>
-          <p className="font-mono text-xs">Password: admin123</p>
-          <p className="text-xs mt-2 text-gray-500">
-            Create admin user in database: database/create_admin_user.sql
-          </p>
+          <p className="font-mono text-xs">Password:password</p>
         </div>
       </div>
     </div>

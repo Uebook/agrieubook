@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     // Get purchases from payments table (primary source)
+    // Exclude subscription purchases - only show book/audio book purchases
     let paymentsQuery = supabase
       .from('payments')
       .select(`
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
         audio_book:audio_books(id, title, cover_url, category_id, category:categories(id, name))
       `)
       .eq('status', 'completed') // Only completed payments
+      .is('subscription_type_id', null) // Exclude subscription purchases
       .order('created_at', { ascending: false });
 
     // Apply book type filter

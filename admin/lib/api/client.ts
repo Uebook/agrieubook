@@ -399,6 +399,65 @@ class ApiClient {
     });
   }
 
+  // Subscriptions API
+  async getSubscriptions(params?: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    is_active?: boolean;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, value.toString());
+        }
+      });
+    }
+    const query = queryParams.toString();
+    return this.request<{ subscriptionTypes: any[]; pagination: any }>(
+      `/api/subscriptions${query ? `?${query}` : ''}`
+    );
+  }
+
+  async getSubscription(id: string) {
+    return this.request<{ subscriptionType: any }>(`/api/subscriptions/${id}`);
+  }
+
+  async createSubscription(data: {
+    name: string;
+    type: string;
+    description?: string | null;
+    price: number;
+    duration_days?: number | null;
+    is_active?: boolean;
+  }) {
+    return this.request<{ success: boolean; subscriptionType: any }>('/api/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSubscription(id: string, data: {
+    name?: string;
+    type?: string;
+    description?: string | null;
+    price?: number;
+    duration_days?: number | null;
+    is_active?: boolean;
+  }) {
+    return this.request<{ success: boolean; subscriptionType: any }>(`/api/subscriptions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSubscription(id: string) {
+    return this.request<{ success: boolean }>(`/api/subscriptions/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // YouTube Channels API
   async getYouTubeChannels(params?: { page?: number; limit?: number; category?: string; status?: string }) {
     const queryParams = new URLSearchParams();

@@ -50,12 +50,10 @@ export default function SubscriptionsPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiClient.request('/api/subscriptions', {
-        method: 'GET',
-        params: {
-          page: pagination.page,
-          limit: pagination.limit,
-        },
+      const response = await apiClient.getSubscriptions({
+        page: pagination.page,
+        limit: pagination.limit,
+        type: 'monthly',
       });
       setSubscriptions(response.subscriptionTypes || []);
       if (response.pagination) {
@@ -94,15 +92,9 @@ export default function SubscriptionsPage() {
       };
 
       if (editingSubscription) {
-        await apiClient.request(`/api/subscriptions/${editingSubscription.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        });
+        await apiClient.updateSubscription(editingSubscription.id, payload);
       } else {
-        await apiClient.request('/api/subscriptions', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
+        await apiClient.createSubscription(payload);
       }
 
       setShowAddModal(false);
@@ -141,9 +133,7 @@ export default function SubscriptionsPage() {
     }
 
     try {
-      await apiClient.request(`/api/subscriptions/${id}`, {
-        method: 'DELETE',
-      });
+      await apiClient.deleteSubscription(id);
       fetchSubscriptions();
     } catch (err: any) {
       console.error('Error deleting subscription:', err);
@@ -153,12 +143,9 @@ export default function SubscriptionsPage() {
 
   const toggleActive = async (subscription: SubscriptionType) => {
     try {
-      await apiClient.request(`/api/subscriptions/${subscription.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          ...subscription,
-          is_active: !subscription.is_active,
-        }),
+      await apiClient.updateSubscription(subscription.id, {
+        ...subscription,
+        is_active: !subscription.is_active,
       });
       fetchSubscriptions();
     } catch (err: any) {
@@ -298,7 +285,10 @@ export default function SubscriptionsPage() {
                     <Pagination
                       currentPage={pagination.page}
                       totalPages={pagination.totalPages}
+                      totalItems={pagination.total}
+                      itemsPerPage={pagination.limit}
                       onPageChange={(page) => setPagination(prev => ({ ...prev, page }))}
+                      onItemsPerPageChange={(itemsPerPage) => setPagination(prev => ({ ...prev, limit: itemsPerPage, page: 1 }))}
                     />
                   </div>
                 )}

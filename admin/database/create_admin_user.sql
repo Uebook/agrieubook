@@ -9,14 +9,14 @@ VALUES (
   'admin@agribook.com',
   '1234567890',
   'admin',
-  'admin123', -- Plain text password for development (use bcrypt hash in production!)
+  'password', -- Plain text password for development (use bcrypt hash in production!)
   'active',
   NOW()
 )
 ON CONFLICT (email) 
 DO UPDATE SET
   role = 'admin',
-  password_hash = 'admin123', -- Update password if user exists
+  password_hash = 'password', -- Update password if user exists
   status = 'active';
 
 -- Note: In production, hash passwords with bcrypt before storing

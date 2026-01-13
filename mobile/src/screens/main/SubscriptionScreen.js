@@ -84,58 +84,69 @@ const SubscriptionScreen = ({ navigation }) => {
       return;
     }
 
-    const amount = subscription.price * 100; // Convert to paise
-
     setProcessing(true);
 
     try {
-      // Create Razorpay order
-      const orderResponse = await apiClient.request('/api/payments/razorpay/order', {
-        method: 'POST',
-        body: JSON.stringify({
-          amount: amount,
-          currency: 'INR',
-        }),
+      console.log('💳 Initiating subscription payment directly with Razorpay:', {
+        amount: subscription.price,
+        subscriptionId: subscription.id,
+        userId,
       });
 
-      if (!orderResponse.orderId) {
-        throw new Error('Failed to create payment order');
-      }
+      // Open Razorpay Checkout directly - No order creation API call needed
+      // Razorpay will create the order internally (same as book purchase)
+      const paymentAmount = Math.round(subscription.price * 100); // Convert to paise
 
       const options = {
         description: subscription.name,
-        image: 'https://your-app-logo.png',
+        image: 'https://i.imgur.com/3l7C2Jn.png', // App logo
         currency: 'INR',
         key: RAZORPAY_KEY_ID,
-        amount: amount,
+        amount: paymentAmount, // Amount in paise
         name: 'AgriBook',
-        order_id: orderResponse.orderId,
         prefill: {
-          email: userData?.email || '',
-          contact: userData?.mobile || '',
-          name: userData?.name || '',
+          email: userData?.email || 'customer@example.com',
+          contact: userData?.mobile || userData?.phone || '9999999999',
+          name: userData?.name || 'Customer',
         },
         theme: { color: themeColors.primary.main || '#10B981' },
+        notes: {
+          subscriptionTypeId: subscription.id,
+          userId: userId,
+          type: 'subscription',
+        },
       };
+
+      console.log('💳 Opening Razorpay checkout for subscription:', {
+        ...options,
+        key: options.key.substring(0, 15) + '...',
+      });
 
       RazorpayCheckout.open(options)
         .then(async (data) => {
+          // Payment success - Razorpay SDK returns payment data
+          console.log('✅ Subscription payment success:', {
+            razorpay_payment_id: data.razorpay_payment_id,
+            razorpay_order_id: data.razorpay_order_id,
+            hasPaymentId: !!data.razorpay_payment_id,
+          });
+
+          // Validate required data
+          if (!data.razorpay_payment_id) {
+            throw new Error('Payment ID is missing from Razorpay response');
+          }
+
+          setProcessing(true); // Keep loading while activating subscription
+
           try {
-            // Verify payment
-            const verifyResponse = await apiClient.request('/api/payments/razorpay/verify', {
-              method: 'POST',
-              body: JSON.stringify({
-                razorpay_order_id: data.razorpay_order_id,
-                razorpay_payment_id: data.razorpay_payment_id,
-                razorpay_signature: data.razorpay_signature,
-              }),
+            // Create payment record
+            console.log('📦 Creating payment record for subscription:', {
+              paymentId: data.razorpay_payment_id,
+              userId,
+              subscriptionId: subscription.id,
+              amount: subscription.price,
             });
 
-            if (!verifyResponse.success) {
-              throw new Error('Payment verification failed');
-            }
-
-            // Create payment record
             const paymentResponse = await apiClient.request('/api/payments', {
               method: 'POST',
               body: JSON.stringify({
@@ -147,7 +158,10 @@ const SubscriptionScreen = ({ navigation }) => {
               }),
             });
 
+            console.log('✅ Payment record created:', paymentResponse);
+
             // Activate subscription
+            console.log('🎯 Activating subscription...');
             const subscribeResponse = await apiClient.subscribeUser(
               userId,
               subscription.id,
@@ -156,6 +170,7 @@ const SubscriptionScreen = ({ navigation }) => {
             );
 
             if (subscribeResponse.success) {
+              console.log('✅ Subscription activated successfully');
               Alert.alert(
                 'Subscription Activated! 🎉',
                 `Your ${subscription.name} has been activated successfully!`,
@@ -169,24 +184,73 @@ const SubscriptionScreen = ({ navigation }) => {
                   },
                 ]
               );
+            } else {
+              throw new Error(subscribeResponse.error || 'Failed to activate subscription');
             }
-          } catch (error) {
-            console.error('Error processing subscription:', error);
-            Alert.alert('Error', 'Failed to activate subscription. Please contact support.');
+          } catch (purchaseError) {
+            console.error('❌ Subscription activation error:', purchaseError);
+            Alert.alert(
+              'Subscription Error',
+              'Your payment was successful, but we encountered an issue activating your subscription. Please contact support with your payment ID: ' + (data.razorpay_payment_id || 'N/A'),
+              [{ text: 'OK' }]
+            );
           } finally {
             setProcessing(false);
           }
         })
         .catch((error) => {
-          console.error('Payment error:', error);
-          if (error.code !== 'E_PAYMENT_CANCELLED') {
-            Alert.alert('Payment Error', error.description || 'Payment failed. Please try again.');
-          }
+          console.error('❌ Razorpay checkout error:', {
+            code: error.code,
+            description: error.description,
+            message: error.message,
+          });
+
           setProcessing(false);
+
+          // Handle different error types
+          if (error.code === 'NETWORK_ERROR') {
+            Alert.alert(
+              'Network Error',
+              'Please check your internet connection and try again.',
+              [{ text: 'OK' }]
+            );
+          } else if (error.code === 'BAD_REQUEST_ERROR') {
+            Alert.alert(
+              'Payment Error',
+              error.description || 'Invalid payment request. Please try again.',
+              [{ text: 'OK' }]
+            );
+          } else if (error.description === 'Payment cancelled' || error.code === 'PAYMENT_CANCELLED' || error.code === 2 || error.code === 'E_PAYMENT_CANCELLED') {
+            // User cancelled - don't show error, just log
+            console.log('Payment cancelled by user');
+          } else {
+            Alert.alert(
+              'Payment Failed',
+              error.description || error.message || 'Payment could not be completed. Please try again.',
+              [{ text: 'OK' }]
+            );
+          }
         });
     } catch (error) {
-      console.error('Error initiating payment:', error);
-      Alert.alert('Error', 'Failed to initiate payment. Please try again.');
+      console.error('❌ Error initiating subscription payment:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.status,
+        details: error.details,
+      });
+
+      let errorMessage = error.message || 'Failed to initiate payment';
+
+      // Provide more helpful error messages
+      if (error.message?.includes('Network')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (error.details) {
+        errorMessage = `${errorMessage}\n\nDetails: ${error.details}`;
+      } else if (error.status === 500) {
+        errorMessage = 'Server error. Please try again later or contact support.';
+      }
+
+      Alert.alert('Payment Error', errorMessage, [{ text: 'OK' }]);
       setProcessing(false);
     }
   };

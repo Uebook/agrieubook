@@ -53,27 +53,40 @@ function getRazorpayInstance() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { amount, currency = 'INR', bookId, audioBookId, userId } = body;
+    const { amount, currency = 'INR', bookId, audioBookId, userId, subscriptionTypeId, isSubscription } = body;
 
     if (!amount || amount <= 0) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Invalid amount' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     if (!userId) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'User ID is required' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
-    if (!bookId && !audioBookId) {
-      return NextResponse.json(
-        { error: 'Either bookId or audioBookId is required' },
+    // For subscriptions, bookId/audioBookId are not required
+    if (!isSubscription && !bookId && !audioBookId) {
+      const errorResponse = NextResponse.json(
+        { error: 'Either bookId or audioBookId is required for book purchases' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     // Amount in paise (Razorpay expects amount in smallest currency unit)
@@ -93,14 +106,20 @@ export async function POST(request: NextRequest) {
     });
 
     // Create Razorpay order
+    const receiptId = isSubscription 
+      ? `sub_${Date.now()}_${subscriptionTypeId || 'unknown'}`
+      : `receipt_${Date.now()}_${bookId || audioBookId}`;
+    
     const options = {
       amount: amountInPaise,
       currency: currency,
-      receipt: `receipt_${Date.now()}_${bookId || audioBookId}`,
+      receipt: receiptId,
       notes: {
         userId: userId,
         bookId: bookId || null,
         audioBookId: audioBookId || null,
+        subscriptionTypeId: subscriptionTypeId || null,
+        isSubscription: isSubscription || false,
       },
     };
 
