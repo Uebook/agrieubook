@@ -16,10 +16,10 @@ import { sendPushNotification } from '@/lib/firebase/admin';
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { user_id, user_ids, role, title, body, data } = body;
+    const requestBody = await request.json();
+    const { user_id, user_ids, role, title, body: messageBody, data } = requestBody;
 
-    if (!title || !body) {
+    if (!title || !messageBody) {
       return NextResponse.json(
         { error: 'title and body are required' },
         { status: 400 }
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send push notifications via Firebase Admin SDK
-    const sendResults = await sendPushNotification(fcmTokens, title, body, data);
+    const sendResults = await sendPushNotification(fcmTokens, title, messageBody, data);
 
     // Also create in-app notifications in the database
     const notifications = targetUserIds.map((uid) => ({

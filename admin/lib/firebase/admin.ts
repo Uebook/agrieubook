@@ -3,23 +3,33 @@
  * Handles Firebase Admin setup for sending push notifications
  */
 
-import * as admin from 'firebase-admin';
+// Conditional import to prevent build errors if firebase-admin is not installed
+let admin: typeof import('firebase-admin') | null = null;
+try {
+  admin = require('firebase-admin');
+} catch (error) {
+  console.warn('firebase-admin not available:', error);
+}
 
-let firebaseAdmin: admin.app.App | null = null;
+let firebaseAdmin: any = null;
 
 /**
  * Initialize Firebase Admin SDK
  * Should be called once at application startup
  */
-export function initializeFirebaseAdmin(): admin.app.App {
+export function initializeFirebaseAdmin(): any {
+  if (!admin) {
+    throw new Error('firebase-admin is not installed. Please install it: npm install firebase-admin');
+  }
+
   if (firebaseAdmin) {
     return firebaseAdmin;
   }
 
   try {
     // Check if already initialized
-    if (admin.apps.length > 0) {
-      firebaseAdmin = admin.apps[0] as admin.app.App;
+    if (admin!.apps.length > 0) {
+      firebaseAdmin = admin!.apps[0];
       return firebaseAdmin;
     }
 
@@ -33,26 +43,26 @@ export function initializeFirebaseAdmin(): admin.app.App {
       );
     }
 
-    let credential: admin.credential.Credential;
+    let credential: any;
 
     if (serviceAccountKey) {
       // Parse JSON string from environment variable
       try {
         const serviceAccount = JSON.parse(serviceAccountKey);
-        credential = admin.credential.cert(serviceAccount);
+        credential = admin!.credential.cert(serviceAccount);
       } catch (error) {
         throw new Error('Invalid FIREBASE_SERVICE_ACCOUNT_KEY format. Must be valid JSON string.');
       }
     } else if (serviceAccountPath) {
       // Use file path (for local development)
       const serviceAccount = require(serviceAccountPath);
-      credential = admin.credential.cert(serviceAccount);
+      credential = admin!.credential.cert(serviceAccount);
     } else {
       throw new Error('Firebase Admin credentials not configured.');
     }
 
     // Initialize Firebase Admin
-    firebaseAdmin = admin.initializeApp({
+    firebaseAdmin = admin!.initializeApp({
       credential,
     });
 
@@ -68,7 +78,10 @@ export function initializeFirebaseAdmin(): admin.app.App {
  * Get Firebase Admin instance
  * Initializes if not already initialized
  */
-export function getFirebaseAdmin(): admin.app.App {
+export function getFirebaseAdmin(): any {
+  if (!admin) {
+    throw new Error('firebase-admin is not installed. Please install it: npm install firebase-admin');
+  }
   if (!firebaseAdmin) {
     return initializeFirebaseAdmin();
   }
@@ -85,7 +98,11 @@ export async function sendPushNotification(
   data?: Record<string, any>
 ): Promise<{ successCount: number; failureCount: number }> {
   try {
-    const admin = getFirebaseAdmin();
+    if (!admin) {
+      throw new Error('firebase-admin is not installed');
+    }
+    
+    const firebaseApp = getFirebaseAdmin();
 
     if (tokens.length === 0) {
       return { successCount: 0, failureCount: 0 };
@@ -100,7 +117,7 @@ export async function sendPushNotification(
       : {};
 
     // Prepare notification payload
-    const message: admin.messaging.MulticastMessage = {
+    const message: any = {
       notification: {
         title,
         body,
@@ -131,7 +148,7 @@ export async function sendPushNotification(
     };
 
     // Send to multiple tokens
-    const response = await admin.messaging().sendEachForMulticast(message);
+    const response = await admin!.messaging().sendEachForMulticast(message);
 
     return {
       successCount: response.successCount,
