@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     const notifications = targetUserIds.map((uid) => ({
       user_id: uid,
       title,
-      message: body,
+      message: messageBody,
       description: data?.description || null,
       image_url: data?.imageUrl || null,
       icon: data?.icon || '🔔',
