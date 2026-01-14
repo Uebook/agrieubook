@@ -57,49 +57,103 @@ export async function GET(request: NextRequest) {
     
     try {
       // Check if payments table exists by trying to query it
-      const { data: payments, error: paymentsError } = await supabase
+      const { data: payments, error: paymentsError, count: totalPaymentsCount } = await supabase
         .from('payments')
-        .select('amount, status, book_id, audio_book_id, created_at, platform_commission, gst_amount, author_earnings')
+        .select('amount, status, book_id, audio_book_id, created_at, platform_commission, gst_amount, author_earnings', { count: 'exact', head: false })
         .limit(1);
+      
+      // Debug: Get total count of all payments (any status)
+      const { count: allPaymentsCount } = await supabase
+        .from('payments')
+        .select('*', { count: 'exact', head: true });
+      
+      console.log('📊 Total payments in database (any status):', allPaymentsCount || 0);
       
       // If table doesn't exist (PGRST116) or no error, try to fetch all payments
       if (paymentsError && paymentsError.code === 'PGRST116') {
         // Table doesn't exist, use defaults
-        console.log('Payments table not found, using default values');
+        console.log('❌ Payments table not found, using default values');
       } else if (!paymentsError) {
-        // Table exists, fetch book/audio book payments (same query pattern as purchases API)
-        // Only fetch completed payments that are NOT subscriptions and have book_id or audio_book_id
+        // Table exists, fetch book/audio book payments (EXACT same query pattern as purchases API)
+        // Match the purchases API EXACTLY - same query, same filters
         let paymentsQuery = supabase
           .from('payments')
           .select('amount, status, book_id, audio_book_id, created_at, platform_commission, gst_amount, author_earnings, subscription_type_id, author_id')
           .eq('status', 'completed') // Only completed payments (same as purchases API)
-          .is('subscription_type_id', null); // Exclude subscription purchases
+          .is('subscription_type_id', null); // Exclude subscription purchases (same as purchases API)
         
-        // Get payments that have either book_id or audio_book_id
+        // Apply date filtering if provided
+        if (startDate) {
+          paymentsQuery = paymentsQuery.gte('created_at', startDate);
+        }
+        if (endDate) {
+          // Add one day to endDate to include the entire end date
+          const endDatePlusOne = new Date(endDate);
+          endDatePlusOne.setDate(endDatePlusOne.getDate() + 1);
+          paymentsQuery = paymentsQuery.lt('created_at', endDatePlusOne.toISOString());
+        }
+        
+        // Execute query - EXACT same as purchases API
         const { data: allPayments, error: paymentsFetchError } = await paymentsQuery;
         
         if (paymentsFetchError) {
-          console.error('Error fetching payments:', paymentsFetchError);
+          console.error('❌ Error fetching payments:', paymentsFetchError);
+          console.error('Error details:', JSON.stringify(paymentsFetchError, null, 2));
+        } else {
+          console.log('✅ Payments query successful');
         }
         
         console.log('📊 Dashboard API - All payments fetched:', allPayments?.length || 0);
         
-        // Filter to only include payments with book_id or audio_book_id
-        const bookPayments = (allPayments || []).filter(p => p.book_id || p.audio_book_id);
+        // Filter payments - EXACT same logic as purchases API
+        // Purchases API filters in JavaScript: payments with book_id OR audio_book_id
+        // This matches what shows on the Purchases page
+        const bookPayments = (allPayments || []).filter(p => {
+          return p.book_id || p.audio_book_id; // Must have book_id OR audio_book_id
+        });
         
-        console.log('📊 Filtered book payments (with book_id/audio_book_id):', bookPayments.length);
+        console.log('📊 Total payments from query:', allPayments?.length || 0);
+        console.log('📊 Payments with book_id or audio_book_id:', bookPayments.length);
+        
+        if (allPayments && allPayments.length > 0) {
+          console.log('📊 Sample payment from query:', JSON.stringify(allPayments[0], null, 2));
+          console.log('📊 Payment breakdown:', {
+            total: allPayments.length,
+            withBookId: allPayments.filter(p => p.book_id).length,
+            withAudioBookId: allPayments.filter(p => p.audio_book_id).length,
+            withBookOrAudioBook: bookPayments.length,
+            withAmountGreaterThanZero: allPayments.filter(p => parseFloat(String(p.amount || 0)) > 0).length,
+            sampleAmounts: allPayments.slice(0, 3).map(p => ({ 
+              amount: p.amount, 
+              book_id: p.book_id, 
+              audio_book_id: p.audio_book_id,
+              status: p.status,
+              subscription_type_id: p.subscription_type_id
+            }))
+          });
+        }
+        
         if (bookPayments.length > 0) {
-          console.log('📊 Sample payment:', JSON.stringify(bookPayments[0], null, 2));
+          console.log('✅ Found book payments:', bookPayments.length);
+          console.log('📊 Sample book payment:', JSON.stringify(bookPayments[0], null, 2));
+        } else {
+          console.log('⚠️ No book payments found after filtering');
+          if (allPayments && allPayments.length > 0) {
+            console.log('⚠️ But payments exist! Check if they have book_id or audio_book_id');
+            console.log('📊 All payments sample:', JSON.stringify(allPayments.slice(0, 3), null, 2));
+          }
         }
         
         if (bookPayments && bookPayments.length > 0) {
           
           totalPayments = bookPayments.length;
-          // Calculate totals
-          totalRevenue = bookPayments.reduce((sum, p) => sum + (parseFloat(String(p.amount)) || 0), 0);
+          // Calculate totals - only include payments with amount > 0 for revenue
+          const revenuePayments = bookPayments.filter(p => parseFloat(String(p.amount || 0)) > 0);
+          totalRevenue = revenuePayments.reduce((sum, p) => sum + (parseFloat(String(p.amount)) || 0), 0);
           
           // Calculate commission/GST - use stored values or calculate on the fly
-          for (const payment of bookPayments) {
+          // Only process payments with amount > 0 for revenue calculations
+          for (const payment of bookPayments.filter(p => parseFloat(String(p.amount || 0)) > 0)) {
             const amount = parseFloat(String(payment.amount)) || 0;
             
             // If commission fields are missing, calculate them
@@ -133,8 +187,9 @@ export async function GET(request: NextRequest) {
           });
           
           // Calculate author revenue (group by author) - use author_earnings from payments
+          // Only process payments with amount > 0
           const authorRevenueMap = new Map();
-          for (const payment of bookPayments) {
+          for (const payment of bookPayments.filter(p => parseFloat(String(p.amount || 0)) > 0)) {
             const amount = parseFloat(String(payment.amount)) || 0;
             if (amount > 0) {
               // Calculate author earnings (use stored value or calculate)
