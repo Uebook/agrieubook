@@ -94,6 +94,7 @@ export async function GET(request: NextRequest) {
         }
         
         // Execute query - EXACT same as purchases API
+        console.log('🔍 Executing payments query...');
         const { data: allPayments, error: paymentsFetchError } = await paymentsQuery;
         
         if (paymentsFetchError) {
@@ -103,66 +104,119 @@ export async function GET(request: NextRequest) {
           console.log('✅ Payments query successful');
         }
         
-        console.log('📊 Dashboard API - All payments fetched:', allPayments?.length || 0);
+        console.log('📊 ========================================');
+        console.log('📊 DASHBOARD PAYMENTS DEBUG START');
+        console.log('📊 ========================================');
+        console.log('📊 All payments fetched from query:', allPayments?.length || 0);
+        
+        // Log ALL payments with full details
+        if (allPayments && allPayments.length > 0) {
+          console.log('📊 ALL PAYMENTS FROM QUERY:');
+          allPayments.forEach((p: any, index: number) => {
+            console.log(`📊 Payment ${index + 1}:`, {
+              id: p.id,
+              amount: p.amount,
+              status: p.status,
+              book_id: p.book_id,
+              audio_book_id: p.audio_book_id,
+              subscription_type_id: p.subscription_type_id,
+              created_at: p.created_at,
+              platform_commission: p.platform_commission,
+              gst_amount: p.gst_amount,
+              author_earnings: p.author_earnings,
+              hasBookId: !!p.book_id,
+              hasAudioBookId: !!p.audio_book_id,
+              hasBookOrAudioBook: !!(p.book_id || p.audio_book_id),
+              amountValue: parseFloat(String(p.amount || 0))
+            });
+          });
+        } else {
+          console.log('⚠️ NO PAYMENTS RETURNED FROM QUERY!');
+        }
         
         // Filter payments - EXACT same logic as purchases API
         // Purchases API filters in JavaScript: payments with book_id OR audio_book_id
         // This matches what shows on the Purchases page
         const bookPayments = (allPayments || []).filter(p => {
-          return p.book_id || p.audio_book_id; // Must have book_id OR audio_book_id
+          const hasBookOrAudioBook = p.book_id || p.audio_book_id;
+          console.log(`🔍 Filtering payment: book_id=${p.book_id}, audio_book_id=${p.audio_book_id}, matches=${hasBookOrAudioBook}`);
+          return hasBookOrAudioBook; // Must have book_id OR audio_book_id
         });
         
+        console.log('📊 ========================================');
+        console.log('📊 FILTERED RESULTS:');
         console.log('📊 Total payments from query:', allPayments?.length || 0);
         console.log('📊 Payments with book_id or audio_book_id:', bookPayments.length);
-        
-        if (allPayments && allPayments.length > 0) {
-          console.log('📊 Sample payment from query:', JSON.stringify(allPayments[0], null, 2));
-          console.log('📊 Payment breakdown:', {
-            total: allPayments.length,
-            withBookId: allPayments.filter(p => p.book_id).length,
-            withAudioBookId: allPayments.filter(p => p.audio_book_id).length,
-            withBookOrAudioBook: bookPayments.length,
-            withAmountGreaterThanZero: allPayments.filter(p => parseFloat(String(p.amount || 0)) > 0).length,
-            sampleAmounts: allPayments.slice(0, 3).map(p => ({ 
-              amount: p.amount, 
-              book_id: p.book_id, 
-              audio_book_id: p.audio_book_id,
-              status: p.status,
-              subscription_type_id: p.subscription_type_id
-            }))
-          });
-        }
+        console.log('📊 ========================================');
         
         if (bookPayments.length > 0) {
-          console.log('✅ Found book payments:', bookPayments.length);
-          console.log('📊 Sample book payment:', JSON.stringify(bookPayments[0], null, 2));
+          console.log('✅ FOUND BOOK PAYMENTS:', bookPayments.length);
+          console.log('📊 BOOK PAYMENTS DETAILS:');
+          bookPayments.forEach((p: any, index: number) => {
+            console.log(`📊 Book Payment ${index + 1}:`, {
+              id: p.id,
+              amount: p.amount,
+              amountParsed: parseFloat(String(p.amount || 0)),
+              book_id: p.book_id,
+              audio_book_id: p.audio_book_id,
+              platform_commission: p.platform_commission,
+              gst_amount: p.gst_amount,
+              author_earnings: p.author_earnings
+            });
+          });
         } else {
-          console.log('⚠️ No book payments found after filtering');
+          console.log('⚠️ NO BOOK PAYMENTS FOUND AFTER FILTERING!');
           if (allPayments && allPayments.length > 0) {
-            console.log('⚠️ But payments exist! Check if they have book_id or audio_book_id');
-            console.log('📊 All payments sample:', JSON.stringify(allPayments.slice(0, 3), null, 2));
+            console.log('⚠️ Payments exist but none have book_id or audio_book_id');
+            console.log('📊 All payments (first 5):', JSON.stringify(allPayments.slice(0, 5), null, 2));
+          } else {
+            console.log('⚠️ No payments returned from query at all!');
           }
         }
         
         if (bookPayments && bookPayments.length > 0) {
+          console.log('📊 ========================================');
+          console.log('📊 CALCULATING TOTALS:');
+          console.log('📊 ========================================');
           
           totalPayments = bookPayments.length;
+          console.log('📊 Total Payments Count:', totalPayments);
+          
           // Calculate totals - only include payments with amount > 0 for revenue
-          const revenuePayments = bookPayments.filter(p => parseFloat(String(p.amount || 0)) > 0);
-          totalRevenue = revenuePayments.reduce((sum, p) => sum + (parseFloat(String(p.amount)) || 0), 0);
+          const revenuePayments = bookPayments.filter(p => {
+            const amount = parseFloat(String(p.amount || 0));
+            const included = amount > 0;
+            console.log(`💰 Payment ${p.id}: amount=${p.amount} (parsed=${amount}), included=${included}`);
+            return included;
+          });
+          
+          console.log('📊 Revenue payments (amount > 0):', revenuePayments.length);
+          
+          totalRevenue = revenuePayments.reduce((sum, p) => {
+            const amount = parseFloat(String(p.amount)) || 0;
+            console.log(`💰 Adding to revenue: ${amount}, running total: ${sum + amount}`);
+            return sum + amount;
+          }, 0);
+          
+          console.log('📊 Total Revenue Calculated:', totalRevenue);
           
           // Calculate commission/GST - use stored values or calculate on the fly
           // Only process payments with amount > 0 for revenue calculations
+          console.log('📊 Calculating commission/GST/earnings...');
           for (const payment of bookPayments.filter(p => parseFloat(String(p.amount || 0)) > 0)) {
             const amount = parseFloat(String(payment.amount)) || 0;
+            console.log(`💰 Processing payment ${payment.id}: amount=${amount}`);
             
             // If commission fields are missing, calculate them
             let gstAmount = parseFloat(String(payment.gst_amount)) || 0;
             let platformCommission = parseFloat(String(payment.platform_commission)) || 0;
             let authorEarnings = parseFloat(String(payment.author_earnings)) || 0;
             
+            console.log(`💰 Stored values: GST=${gstAmount}, Commission=${platformCommission}, Earnings=${authorEarnings}`);
+            
             // Only calculate if amount > 0 and fields are missing
             if (amount > 0 && (gstAmount === 0 || platformCommission === 0 || authorEarnings === 0)) {
+              console.log(`💰 Calculating missing values for payment ${payment.id}...`);
               // GST calculation: 18% of gross amount
               gstAmount = parseFloat((amount * 0.18).toFixed(2));
               // Net amount after GST
@@ -171,20 +225,25 @@ export async function GET(request: NextRequest) {
               platformCommission = parseFloat((netAmount * 0.30).toFixed(2));
               // Author earnings: 70% of net amount
               authorEarnings = parseFloat((netAmount * 0.70).toFixed(2));
+              console.log(`💰 Calculated: GST=${gstAmount}, Net=${netAmount}, Commission=${platformCommission}, Earnings=${authorEarnings}`);
             }
             
             totalPlatformCommission += platformCommission;
             totalGST += gstAmount;
             totalAuthorEarnings += authorEarnings;
+            
+            console.log(`💰 Running totals: Commission=${totalPlatformCommission}, GST=${totalGST}, Earnings=${totalAuthorEarnings}`);
           }
           
-          console.log('📊 Calculated totals:', {
-            totalRevenue,
-            totalPlatformCommission,
-            totalGST,
-            totalAuthorEarnings,
-            totalPayments: bookPayments.length
-          });
+          console.log('📊 ========================================');
+          console.log('📊 FINAL CALCULATED TOTALS:');
+          console.log('📊 ========================================');
+          console.log('📊 Total Payments:', bookPayments.length);
+          console.log('📊 Total Revenue:', totalRevenue);
+          console.log('📊 Total Platform Commission:', totalPlatformCommission);
+          console.log('📊 Total GST:', totalGST);
+          console.log('📊 Total Author Earnings:', totalAuthorEarnings);
+          console.log('📊 ========================================');
           
           // Calculate author revenue (group by author) - use author_earnings from payments
           // Only process payments with amount > 0
@@ -262,7 +321,7 @@ export async function GET(request: NextRequest) {
     // Calculate platform profit (commission - GST is already deducted from gross)
     const platformProfit = totalPlatformCommission;
 
-    return NextResponse.json({
+    const response = {
       totalBooks: totalBooks || 0,
       totalAudioBooks: totalAudioBooks || 0,
       totalAuthors: totalAuthors || 0,
@@ -277,7 +336,17 @@ export async function GET(request: NextRequest) {
       pendingAudioBooks: pendingAudioBooks || 0,
       activeUsers: activeUsers || 0,
       authorRevenue,
-    });
+    };
+
+    console.log('📊 ========================================');
+    console.log('📊 FINAL RESPONSE:');
+    console.log('📊 ========================================');
+    console.log('📊 Response JSON:', JSON.stringify(response, null, 2));
+    console.log('📊 ========================================');
+    console.log('📊 DASHBOARD PAYMENTS DEBUG END');
+    console.log('📊 ========================================');
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Error in GET /api/dashboard:', error);
     return NextResponse.json(
