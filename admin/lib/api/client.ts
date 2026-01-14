@@ -307,6 +307,10 @@ class ApiClient {
       totalUsers: number;
       totalRevenue: number;
       totalPayments: number;
+      totalPlatformCommission: number;
+      totalGST: number;
+      totalAuthorEarnings: number;
+      platformProfit: number;
       pendingBooks: number;
       pendingAudioBooks: number;
       activeUsers: number;

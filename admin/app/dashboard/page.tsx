@@ -16,6 +16,10 @@ export default function DashboardPage() {
     totalUsers: 0,
     totalRevenue: 0,
     totalPayments: 0,
+    totalPlatformCommission: 0,
+    totalGST: 0,
+    totalAuthorEarnings: 0,
+    platformProfit: 0,
     pendingBooks: 0,
     pendingAudioBooks: 0,
     activeUsers: 0,
@@ -52,6 +56,10 @@ export default function DashboardPage() {
         totalUsers: 0,
         totalRevenue: 0,
         totalPayments: 0,
+        totalPlatformCommission: 0,
+        totalGST: 0,
+        totalAuthorEarnings: 0,
+        platformProfit: 0,
         pendingBooks: 0,
         pendingAudioBooks: 0,
         activeUsers: 0,
@@ -103,6 +111,34 @@ export default function DashboardPage() {
       value: stats.totalPayments,
       icon: '💳',
       color: 'bg-indigo-500',
+      link: '#',
+    },
+    {
+      title: 'Platform Commission',
+      value: `₹${stats.totalPlatformCommission.toLocaleString()}`,
+      icon: '💼',
+      color: 'bg-cyan-500',
+      link: '#',
+    },
+    {
+      title: 'Total GST',
+      value: `₹${stats.totalGST.toLocaleString()}`,
+      icon: '📋',
+      color: 'bg-pink-500',
+      link: '#',
+    },
+    {
+      title: 'Author Earnings',
+      value: `₹${stats.totalAuthorEarnings.toLocaleString()}`,
+      icon: '👨‍💼',
+      color: 'bg-amber-500',
+      link: '#',
+    },
+    {
+      title: 'Platform Profit',
+      value: `₹${stats.platformProfit.toLocaleString()}`,
+      icon: '📈',
+      color: 'bg-lime-500',
       link: '#',
     },
     {
@@ -183,7 +219,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6 mb-8">
               {statCards.map((card, index) => (
                 <Link
                   key={index}

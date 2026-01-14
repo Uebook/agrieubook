@@ -888,6 +888,36 @@ class ApiClient {
       }),
     });
   }
+
+  // FCM Token API
+  async updateFCMToken(userId, fcmToken) {
+    console.log('📡 Calling FCM token API:', {
+      endpoint: '/api/users/fcm-token',
+      userId: userId,
+      tokenLength: fcmToken ? fcmToken.length : 0,
+    });
+    
+    try {
+      const result = await this.request('/api/users/fcm-token', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: userId,
+          fcm_token: fcmToken,
+        }),
+      });
+      
+      console.log('📡 FCM token API response:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ FCM token API error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        status: error.status,
+        details: error.details,
+      });
+      throw error;
+    }
+  }
 }
 
 const apiClient = new ApiClient();

@@ -37,7 +37,7 @@
 
 ### Step 3: Add Environment Variables
 
-Add these **4 variables** one by one:
+Add these **5 variables** one by one:
 
 #### Variable 1: `NEXT_PUBLIC_SUPABASE_URL`
 - **Value**: `https://isndoxsyjbdzibhkrisj.supabase.co`
@@ -59,6 +59,15 @@ Add these **4 variables** one by one:
 - **Value**: `https://admin-orcin-omega.vercel.app`
 - **Environment**: Select **Production**, **Preview**, and **Development**
 - Click **Save**
+
+#### Variable 5: `FIREBASE_SERVICE_ACCOUNT_KEY` (Firebase Push Notifications)
+- **Value**: Single-line JSON string from Firebase service account key
+  - Get it from: Firebase Console → Project Settings → Service Accounts → Generate New Private Key
+  - Convert JSON to single line: `cat service-account.json | jq -c`
+- **Environment**: Select **Production**, **Preview**, and **Development**
+- ⚠️ **Important**: This is a secret key! Never commit to git.
+- Click **Save**
+- 📖 **Detailed instructions**: See `VERCEL_FIREBASE_SETUP.md`
 
 ### Step 4: Redeploy
 
@@ -108,6 +117,7 @@ curl -X POST https://admin-orcin-omega.vercel.app/api/upload \
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `eyJhbGci...` | Public API key (safe for frontend) |
 | `SUPABASE_SERVICE_ROLE_KEY` | `eyJhbGci...` | Service role key (backend only) |
 | `NEXT_PUBLIC_APP_URL` | `https://admin-orcin-omega.vercel.app` | Your Vercel app URL |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | `{"type":"service_account",...}` | Firebase Admin credentials (for push notifications) |
 
 ---
 
@@ -150,10 +160,11 @@ curl -X POST https://admin-orcin-omega.vercel.app/api/upload \
 
 ## ✅ Checklist
 
-- [ ] All 4 environment variables added to Vercel
+- [ ] All 5 environment variables added to Vercel
 - [ ] Variables set for Production, Preview, and Development
 - [ ] Application redeployed after adding variables
 - [ ] Upload API tested and working
+- [ ] Firebase push notifications set up (see `VERCEL_FIREBASE_SETUP.md`)
 - [ ] Mobile app API URL updated (if needed)
 
 ---

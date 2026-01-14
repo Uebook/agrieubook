@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "109940397306",
+    "project_id": "agriebook-1a0bc",
+    "storage_bucket": "agriebook-1a0bc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:109940397306:android:9de90087a34058c24a6543",
+        "android_client_info": {
+          "package_name": "com.agribook"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUZBv-ip31PMWNbKMU16_CBq_dNilkZOU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

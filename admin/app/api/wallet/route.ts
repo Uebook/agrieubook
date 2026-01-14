@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// CORS headers helper
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS(request: NextRequest) {
+  const response = new NextResponse(null, { status: 200 });
+  Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+  return response;
+}
+
 // GET /api/wallet - Get author wallet balance and summary
 export async function GET(request: NextRequest) {
   try {
@@ -8,10 +27,14 @@ export async function GET(request: NextRequest) {
     const authorId = searchParams.get('author_id');
 
     if (!authorId) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'author_id is required' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     const supabase = createServerClient();
@@ -37,17 +60,25 @@ export async function GET(request: NextRequest) {
         .single();
 
       if (createError) {
-        return NextResponse.json(
+        const errorResponse = NextResponse.json(
           { error: 'Failed to create wallet', details: createError.message },
           { status: 500 }
         );
+        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+          errorResponse.headers.set(key, value);
+        });
+        return errorResponse;
       }
       wallet = newWallet;
     } else if (walletError) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Failed to fetch wallet', details: walletError.message },
         { status: 500 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     // Get recent payment history (last 10)
@@ -71,7 +102,7 @@ export async function GET(request: NextRequest) {
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       wallet: {
         balance: parseFloat(wallet.balance || 0),
@@ -81,11 +112,19 @@ export async function GET(request: NextRequest) {
       recent_payments: recentPayments || [],
       pending_withdrawals: pendingWithdrawals || [],
     });
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    return response;
   } catch (error: any) {
     console.error('Error in GET /api/wallet:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }

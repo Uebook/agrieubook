@@ -22,6 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { useCategories } from '../../context/CategoriesContext';
 import apiClient from '../../services/api';
+import firebaseService from '../../services/firebase';
 
 const HomeScreen = ({ navigation }) => {
   const { userRole, userId, userData } = useAuth();
@@ -129,6 +130,20 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Initialize Firebase and register FCM token
+  useEffect(() => {
+    if (userId) {
+      firebaseService.initialize(userId).catch((error) => {
+        console.error('Error initializing Firebase:', error);
+      });
+    }
+
+    // Cleanup on unmount
+    return () => {
+      firebaseService.cleanup();
+    };
+  }, [userId]);
 
   // Refresh data when screen comes into focus (e.g., after uploading a book)
   useFocusEffect(

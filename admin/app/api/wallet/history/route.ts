@@ -1,6 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/client';
 
+// CORS headers helper
+function getCorsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+}
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS(request: NextRequest) {
+  const response = new NextResponse(null, { status: 200 });
+  Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+    response.headers.set(key, value);
+  });
+  return response;
+}
+
 // GET /api/wallet/history - Get author payment history
 export async function GET(request: NextRequest) {
   try {
@@ -11,10 +30,14 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type'); // 'payments' or 'withdrawals'
 
     if (!authorId) {
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'author_id is required' },
         { status: 400 }
       );
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        errorResponse.headers.set(key, value);
+      });
+      return errorResponse;
     }
 
     const supabase = createServerClient();
@@ -35,13 +58,17 @@ export async function GET(request: NextRequest) {
         .eq('author_id', authorId);
 
       if (withdrawalError) {
-        return NextResponse.json(
+        const errorResponse = NextResponse.json(
           { error: 'Failed to fetch withdrawals', details: withdrawalError.message },
           { status: 500 }
         );
+        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+          errorResponse.headers.set(key, value);
+        });
+        return errorResponse;
       }
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         withdrawals: withdrawals || [],
         pagination: {
@@ -51,6 +78,10 @@ export async function GET(request: NextRequest) {
           totalPages: Math.ceil((count || 0) / limit),
         },
       });
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        response.headers.set(key, value);
+      });
+      return response;
     } else {
       // Get payment history
       const { data: payments, error: paymentError } = await supabase
@@ -71,13 +102,17 @@ export async function GET(request: NextRequest) {
         .eq('author_id', authorId);
 
       if (paymentError) {
-        return NextResponse.json(
+        const errorResponse = NextResponse.json(
           { error: 'Failed to fetch payment history', details: paymentError.message },
           { status: 500 }
         );
+        Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+          errorResponse.headers.set(key, value);
+        });
+        return errorResponse;
       }
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         payments: payments || [],
         pagination: {
@@ -87,12 +122,20 @@ export async function GET(request: NextRequest) {
           totalPages: Math.ceil((count || 0) / limit),
         },
       });
+      Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+        response.headers.set(key, value);
+      });
+      return response;
     }
   } catch (error: any) {
     console.error('Error in GET /api/wallet/history:', error);
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { error: 'Internal server error', details: error.message },
       { status: 500 }
     );
+    Object.entries(getCorsHeaders()).forEach(([key, value]) => {
+      errorResponse.headers.set(key, value);
+    });
+    return errorResponse;
   }
 }
