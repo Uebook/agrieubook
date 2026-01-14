@@ -99,7 +99,12 @@ export async function sendPushNotification(
   title: string,
   body: string,
   data?: Record<string, any>
-): Promise<{ successCount: number; failureCount: number }> {
+): Promise<{ 
+  successCount: number; 
+  failureCount: number;
+  errors?: Array<{ token: string; error: string }>;
+  error?: string;
+}> {
   try {
     const firebaseAdminModule = getAdminModule();
     const firebaseApp = getFirebaseAdmin();
