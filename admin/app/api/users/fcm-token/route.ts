@@ -17,10 +17,33 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 /**
+ * GET /api/users/fcm-token
+ * Test endpoint to verify route is accessible
+ */
+export async function GET(request: NextRequest) {
+  return NextResponse.json({
+    success: true,
+    message: 'FCM token endpoint is accessible',
+    methods: ['POST', 'OPTIONS', 'GET'],
+  }, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+    },
+  });
+}
+
+/**
  * POST /api/users/fcm-token
  * Update or save FCM token for a user
  */
 export async function POST(request: NextRequest) {
+  // CORS headers for all responses
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+
   try {
     const body = await request.json();
     const { user_id, fcm_token } = body;
@@ -31,7 +54,10 @@ export async function POST(request: NextRequest) {
       console.error('❌ Missing required fields:', { user_id: !!user_id, fcm_token: !!fcm_token });
       return NextResponse.json(
         { error: 'user_id and fcm_token are required' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: corsHeaders,
+        }
       );
     }
 
@@ -48,7 +74,10 @@ export async function POST(request: NextRequest) {
       console.error('❌ User not found:', userError);
       return NextResponse.json(
         { error: 'User not found', details: userError?.message },
-        { status: 404 }
+        { 
+          status: 404,
+          headers: corsHeaders,
+        }
       );
     }
 
@@ -107,11 +136,7 @@ export async function POST(request: NextRequest) {
       user_id: user_id,
       fcm_token: fcm_token.substring(0, 20) + '...',
     }, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
+      headers: corsHeaders,
     });
   } catch (error: any) {
     console.error('❌ Error in POST /api/users/fcm-token:', error);
@@ -121,7 +146,14 @@ export async function POST(request: NextRequest) {
         error: 'Internal server error',
         details: error?.message || 'Unknown error',
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
+          'Access-Control-Allow-Headers': 'Content-Type',
+        },
+      }
     );
   }
 }
