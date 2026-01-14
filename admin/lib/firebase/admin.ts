@@ -4,15 +4,15 @@
  */
 
 // Dynamic import to prevent build errors if firebase-admin is not installed
-// Use type-only import for TypeScript, runtime require for actual usage
-type FirebaseAdmin = typeof import('firebase-admin');
-let admin: FirebaseAdmin | null = null;
+// Use any type to avoid TypeScript module resolution at build time
+let admin: any = null;
 
 // Lazy load firebase-admin at runtime
-function getAdminModule(): FirebaseAdmin {
+function getAdminModule(): any {
   if (admin) return admin;
   try {
-    admin = require('firebase-admin') as FirebaseAdmin;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    admin = require('firebase-admin');
     return admin;
   } catch (error) {
     throw new Error('firebase-admin is not installed. Please install it: npm install firebase-admin');
