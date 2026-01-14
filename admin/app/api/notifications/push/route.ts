@@ -104,7 +104,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Send push notifications via Firebase Admin SDK
+    console.log('📤 Attempting to send push notifications to', fcmTokens.length, 'tokens');
     const sendResults = await sendPushNotification(fcmTokens, title, messageBody, data);
+    console.log('📤 Send results:', sendResults);
 
     // Also create in-app notifications in the database
     const notifications = targetUserIds.map((uid) => ({
@@ -131,11 +133,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Push notifications sent',
+      message: sendResults.successCount > 0 
+        ? 'Push notifications sent successfully' 
+        : 'Push notifications failed to send',
       target_users: targetUserIds.length,
       tokens_found: fcmTokens.length,
       notifications_sent: sendResults.successCount,
       notifications_failed: sendResults.failureCount,
+      errors: sendResults.errors || [],
+      error: sendResults.error || null,
     });
   } catch (error) {
     console.error('Error in POST /api/notifications/push:', error);

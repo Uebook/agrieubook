@@ -148,14 +148,43 @@ export async function sendPushNotification(
     };
 
     // Send to multiple tokens
+    console.log('📤 Sending push notification to', tokens.length, 'tokens');
+    console.log('📤 Message:', JSON.stringify(message, null, 2));
+    
     const response = await firebaseAdminModule.messaging().sendEachForMulticast(message);
+
+    console.log('📤 Firebase response:', {
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+      responses: response.responses?.map((r: any, i: number) => ({
+        token: tokens[i],
+        success: r.success,
+        error: r.error ? {
+          code: r.error.code,
+          message: r.error.message,
+        } : null,
+      })),
+    });
 
     return {
       successCount: response.successCount,
       failureCount: response.failureCount,
+      errors: response.responses?.filter((r: any) => r.error).map((r: any, i: number) => ({
+        token: tokens[i],
+        error: r.error?.message || r.error?.code || 'Unknown error',
+      })),
     };
-  } catch (error) {
-    console.error('Error sending Firebase notifications:', error);
-    return { successCount: 0, failureCount: tokens.length };
+  } catch (error: any) {
+    console.error('❌ Error sending Firebase notifications:', error);
+    console.error('❌ Error details:', {
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack,
+    });
+    return { 
+      successCount: 0, 
+      failureCount: tokens.length,
+      error: error?.message || 'Unknown error',
+    };
   }
 }
