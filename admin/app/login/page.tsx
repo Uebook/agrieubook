@@ -112,12 +112,6 @@ export default function LoginPage() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
-
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>Default Admin Credentials:</p>
-          <p className="font-mono text-xs mt-1">Email: admin@agribook.com</p>
-          <p className="font-mono text-xs">Password:password</p>
-        </div>
       </div>
     </div>
   );

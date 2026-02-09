@@ -3,10 +3,10 @@
  * Handles all API requests to Next.js API routes
  */
 
-const API_BASE_URL = 
-  typeof window !== 'undefined' 
-    ? window.location.origin 
-    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const API_BASE_URL =
+  typeof window !== 'undefined'
+    ? window.location.origin + '/admin'
+    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000/admin';
 
 class ApiClient {
   private baseUrl: string;
@@ -20,7 +20,7 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    
+
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
@@ -31,7 +31,7 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      
+
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Request failed' }));
         const errorMessage = error.error || error.message || `HTTP error! status: ${response.status}`;
